@@ -144,13 +144,18 @@ Q_recovery <- function(M_beta, V_beta, alpha = 0.05, Q_true = NULL){
   K <- ncol(beta_hat) - 1
   
   # Remove the intercept term if all values are negative
+  intercept_detected <- FALSE
   for (i in seq(K+1)){
     if (all(beta_hat[, i] < 0)) {
       cat("Column", i, "is the intercept, will be removed. \n")
       beta_hat_main <- beta_hat[, -i]
       beta_hat_sd_main <- beta_hat_sd[, -i]
+      intercept_detected <- TRUE
       break
     }
+  }
+  if (!intercept_detected) {
+    stop("No intercept term detected.")
   }
   
   # Perform one-side z-test for each entry

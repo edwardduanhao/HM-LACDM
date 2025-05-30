@@ -53,7 +53,7 @@ data_generate <- function(I, # Number of respondents
   pii <- torch_ones(2^K, dtype = torch_float()) / 2^K
   
   # Transition probability
-  kernel_mat <- matrix(c(0.4, 0.6, 0.1, 0.9), nrow = 2, byrow = TRUE)
+  kernel_mat <- matrix(c(0.3, 0.7, 0.2, 0.8), nrow = 2, byrow = TRUE)
   
   omega <- torch_ones(2^K, 2^K, dtype = torch_float())
   
@@ -119,12 +119,12 @@ data_generate <- function(I, # Number of respondents
 if (TRUE) {
   Q_mat <- as.matrix(read.table("Q_Matrix/Q_3.txt"))
   data <- data_generate(
-    I = 500,
+    I = 1000,
     K = 3,
     J = 21,
     indT = 2,
     N_dataset = 1,
-    seed = 2024,
+    seed = 2025,
     Q_mat = Q_mat
   )
 }

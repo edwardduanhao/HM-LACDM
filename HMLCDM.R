@@ -45,9 +45,9 @@ beta_dim <- rep(K + 1, J)
 # --------------------- Parameter initialization --------------------- #
 
 # beta
-# M_beta_prior <- lapply(beta_dim, \(d) torch_zeros(d)) # Mean
-M_beta <- lapply(beta_dim, \(d) torch_zeros(d)) # Mean
-M_beta_prior <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(0, K)))) # Mean
+M_beta_prior <- lapply(beta_dim, \(d) torch_zeros(d)) # Mean
+# M_beta_prior <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(3, K)))) # Mean
+M_beta <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(0, K)))) # Mean
 V_beta_prior <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
 V_beta <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
 beta_trace <- lapply(beta_dim, \(d) torch_zeros(max_iter, d)) # Trace of beta
@@ -70,8 +70,14 @@ E_Z_inter <- torch_ones(I, indT, L, L) / (L * L)
 E_Z_trace <- torch_zeros(max_iter, I, indT, L) # Trace of Z
 
 # xi
-xi <- torch_zeros(J, L)
+# xi <- torch_zeros(J, L)
+xi <- update_xi(
+  M_beta = M_beta,
+  V_beta = V_beta,
+  Delta_matrices = Delta_matrices
+)
 xi_trace <- torch_zeros(max_iter, J, L) # Trace of xi
+xi_trace[1, , ] <- xi
 
 # --------------------- Main loop --------------------- #
 cli_progress_bar("Running CAVI", total = 100)
