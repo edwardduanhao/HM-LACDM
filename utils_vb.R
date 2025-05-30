@@ -1,6 +1,5 @@
 source("utils.R")
 
-
 # ---------------------------------------------------------------------------------------------------- #
 
 # Jaakkola's function
@@ -132,4 +131,67 @@ E_log_phi <- function(M_beta,
   }
   log_phi <- ((Y$unsqueeze(-1) - 1 / 2) * F_beta + (nnf_logsigmoid(xi) - xi / 2 - JJ_func(xi) * (F_beta2 - xi$square())))$sum(dim = 3)
   return(log_phi)
+}
+
+# ------------------------------------------------------------------------------------------------------ #
+
+# Post-Hoc Q-matrix Recovery
+Q_recovery <- function(M_beta, V_beta, alpha = 0.05, Q_true = NULL){
+  # Re-format beta
+  beta_hat <- sapply(M_beta, function(x){as_array(x)}) |> t()
+  beta_hat_sd <- sapply(V_beta, function(x){sqrt(as_array(torch_diag(x)))}) |> t()
+  
+  K <- ncol(beta_hat) - 1
+  
+  # Remove the intercept term if all values are negative
+  for (i in seq(K+1)){
+    if (all(beta_hat[, i] < 0)) {
+      cat("Column", i, "is the intercept, will be removed. \n")
+      beta_hat_main <- beta_hat[, -i]
+      beta_hat_sd_main <- beta_hat_sd[, -i]
+      break
+    }
+  }
+  
+  # Perform one-side z-test for each entry
+  Z_score <- beta_hat_main / beta_hat_sd_main
+  log_p_value <- pnorm(Z_score, log.p = TRUE, lower.tail = FALSE) |> as.vector()
+  m <- length(log_p_value)
+  o <- order(log_p_value)
+  log_p_value_sorted <- log_p_value[o]
+  log_q_value <- log(seq(m) / m * alpha) # Benjamini-Hochberg procedure
+  
+  n <- max(which(log_p_value_sorted <= log_q_value), 0L)
+  sig <- logical(m)
+  if (n > 0){
+    sig[o[1:n]] <- TRUE
+  }
+  
+  if (!any(sig)) {
+    warning("No attribute passed the BH threshold at α = ", alpha, ".")
+    Q_hat <- matrix(0L, J, K)
+  } else {
+    Q_hat <- matrix(sig, nrow = nrow(beta_hat_main), ncol = ncol(beta_hat_main)) * 1L
+  }
+  
+  if (!is.null(Q_true)) {
+    Q_hat_best <- Q_hat
+    acc <- 0
+    it <- iterpc(K, K, ordered = TRUE)       # permutation iterator  :contentReference[oaicite:1]{index=1}
+    repeat {
+      if (acc == 1){
+        print("Perfect Q-Matrix recovery achieved.")
+        break
+      }
+      idx <- getnext(it, d = 1, drop = TRUE) # vector of column positions
+      if (length(idx) == 0){break}            # iterator exhausted
+      if (mean((Q_hat[, idx]) == Q_true) > acc){
+        acc <- mean((Q_hat[, idx]) == Q_true)
+        Q_hat_best <- Q_hat[, idx]
+        print(paste0("Permutating ... Best Q-Matrix recovery accuracy is ", round(acc * 100, 3), "%"))
+      }
+    }
+    Q_hat <- Q_hat_best
+  }
+  return(Q_hat)
 }

@@ -119,13 +119,13 @@ data_generate <- function(I, # Number of respondents
 if (TRUE) {
   Q_mat <- as.matrix(read.table("Q_Matrix/Q_3.txt"))
   data <- data_generate(
-    I = 2000,
-    K = 4,
-    J = 31,
+    I = 500,
+    K = 3,
+    J = 21,
     indT = 2,
     N_dataset = 1,
-    seed = 2025,
-    Q_mat = NULL
+    seed = 2024,
+    Q_mat = Q_mat
   )
 }
 
