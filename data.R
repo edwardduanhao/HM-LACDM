@@ -107,6 +107,7 @@ data_generate <- function(I, # Number of respondents
   
   list(
     "Y" = as_array(Y),
+    "K" = K,
     "profiles_mat" = profiles_mat,
     "profiles_index" = int_class,
     "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)),
@@ -118,17 +119,15 @@ data_generate <- function(I, # Number of respondents
 if (TRUE) {
   Q_mat <- as.matrix(read.table("Q_Matrix/Q_3.txt"))
   data <- data_generate(
-    I = 1000,
-    K = 3,
-    J = 21,
+    I = 2000,
+    K = 4,
+    J = 31,
     indT = 2,
     N_dataset = 1,
     seed = 2025,
-    Q_mat = Q_mat
+    Q_mat = NULL
   )
 }
-
-print("Hi")
 
 
 
