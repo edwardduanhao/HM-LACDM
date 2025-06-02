@@ -122,12 +122,16 @@ if (TRUE) {
     I = 1000,
     K = 3,
     J = 21,
-    indT = 2,
+    indT = 4,
     N_dataset = 1,
     seed = 2025,
     Q_mat = Q_mat
   )
 }
+
+
+
+
 
 
 

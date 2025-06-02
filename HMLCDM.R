@@ -5,157 +5,201 @@ require(zeallot)
 require(torch)
 require(iterpc)
 
-# HMLCDM_VB <- function(data,
-#                            interact = TRUE,
-#                            max_iter = 100){
-#
-# }
+HMLCDM_VB <- function(data,
+                      max_iter = 100) {
+  # Print the number of threads Torch is using
+  print(paste("Torch is using", torch_get_num_threads(), "threads"))
 
-max_iter <- 100
+  # Setup a timer
+  start_time <- Sys.time()
 
-# Print the number of threads Torch is using
-print(paste("Torch is using", torch_get_num_threads(), "threads"))
+  # --------------------- Retrieve and format data --------------------- #
 
-# Setup a timer
-start <- Sys.time()
+  # Response matrix Y, shape (N, indT, J)
+  Y <- torch_tensor(data$Y)
 
-# --------------------- Retrieve and format data --------------------- #
+  # Number of observations, number of time points, number of items
+  c(I, indT, J) %<-% Y$shape
 
-# Response matrix Y, shape (N, indT, J)
-Y <- torch_tensor(data$Y)
+  # Number of attributes
+  K <- data$K
+  L <- 2^K
 
-# Number of observations, number of time points, number of items
-c(I, indT, J) %<-% Y$shape
+  # Q-matrix
+  Q_mat <- data$Q_matrix
 
-# Number of attributes
-K <- data$K
-L <- 2^K
+  # Generate the delta matrix for each item
+  Delta_matrices <- lapply(seq(J), \(j) build_delta(
+    q = rep(1, K),
+    interact = FALSE
+  ) |>
+    torch_tensor())
 
-# Q-matrix
-Q_mat <- data$Q_matrix
+  beta_dim <- rep(K + 1, J)
+  # --------------------- Parameter initialization --------------------- #
 
-# Generate the delta matrix for each item
-Delta_matrices <- lapply(seq(J), \(j) build_delta(
-  q = rep(1, K),
-  interact = FALSE
-) |>
-  torch_tensor())
+  # beta
+  M_beta_prior <- lapply(beta_dim, \(d) torch_zeros(d)) # Mean
+  # M_beta_prior <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(3, K)))) # Mean
+  M_beta <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(1, K)))) # Mean
+  V_beta_prior <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
+  V_beta <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
+  beta_trace <- lapply(beta_dim, \(d) torch_zeros(max_iter, d)) # Trace of beta
 
-beta_dim <- rep(K + 1, J)
-# --------------------- Parameter initialization --------------------- #
+  # tau
+  omega_prior <- torch_ones(L, L, dtype = torch_float()) # Dirichlet priors
+  omega <- torch_ones(L, L, dtype = torch_float())
+  omega_trace <- torch_zeros(max_iter, L, L) # Trace of omega
 
-# beta
-M_beta_prior <- lapply(beta_dim, \(d) torch_zeros(d)) # Mean
-# M_beta_prior <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(3, K)))) # Mean
-M_beta <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(0, K)))) # Mean
-V_beta_prior <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
-V_beta <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
-beta_trace <- lapply(beta_dim, \(d) torch_zeros(max_iter, d)) # Trace of beta
+  # pi
+  alpha_prior <- torch_ones(L, dtype = torch_float()) # Dirichlet prior
+  alpha <- torch_ones(L, dtype = torch_float())
+  alpha_trace <- torch_zeros(max_iter, L) # Trace of alpha
 
-# tau
-omega_prior <- torch_ones(L, L, dtype = torch_float()) # Dirichlet priors
-omega <- torch_ones(L, L, dtype = torch_float())
-omega_trace <- torch_zeros(max_iter, L, L) # Trace of omega
+  # Z
+  E_Z <- torch_ones(I, indT, L) / L
+  # E_Z <- torch_randn(I, indT, L) |> nnf_softmax(dim = 3)
 
-# pi
-alpha_prior <- torch_ones(L, dtype = torch_float()) # Dirichlet prior
-alpha <- torch_ones(L, dtype = torch_float())
-alpha_trace <- torch_zeros(max_iter, L) # Trace of alpha
+  E_Z_inter <- torch_ones(I, indT - 1, L, L) / (L * L)
+  E_Z_trace <- torch_zeros(max_iter, I, indT - 1, L) # Trace of Z
 
-# Z
-E_Z <- torch_ones(I, indT, L) / L
-# E_Z <- torch_randn(I, indT, L) |> nnf_softmax(dim = 3)
-
-E_Z_inter <- torch_ones(I, indT, L, L) / (L * L)
-E_Z_trace <- torch_zeros(max_iter, I, indT, L) # Trace of Z
-
-# xi
-# xi <- torch_zeros(J, L)
-xi <- update_xi(
-  M_beta = M_beta,
-  V_beta = V_beta,
-  Delta_matrices = Delta_matrices
-)
-xi_trace <- torch_zeros(max_iter, J, L) # Trace of xi
-xi_trace[1, , ] <- xi
-
-# --------------------- Main loop --------------------- #
-cli_progress_bar("Running CAVI", total = 100)
-for (iter_ in seq(max_iter)){
-  
-  # Update Z
-  log_phi <- E_log_phi(M_beta = M_beta,
-                   V_beta = V_beta,
-                   xi = xi,
-                   Delta_matrices = Delta_matrices)
-  
-  log_kappa <- E_log_pi(alpha)
-  
-  log_eta <- E_log_omega(omega)
-  
-  update_Z(log_phi, log_kappa, log_eta) %->% c(E_Z, E_Z_inter)
-  
-  # Update beta
-  update_beta(
-    Y = Y,
-    K = K,
-    M_beta_prior = M_beta_prior,
-    V_beta_prior = V_beta_prior,
-    Delta_matrices = Delta_matrices,
-    E_Z = E_Z,
-    xi = xi
-  ) %->% c(M_beta, V_beta)
-  
-  # Track the trace of beta
-  for (j in seq(J)) {
-    beta_trace[[j]][iter_, ] <- M_beta[[j]]
-  }
-  
-  
-  # Update xi
-  update_xi(
+  # xi
+  # xi <- torch_zeros(J, L)
+  xi <- update_xi(
     M_beta = M_beta,
     V_beta = V_beta,
     Delta_matrices = Delta_matrices
-  ) %->% xi
-  
-  # Track the trace of xi
-  xi_trace[iter_, , ] <- xi
-  
-  
-  # Update omega
-  update_omega(
-    omega_prior = omega_prior,
-    E_Z_inter = E_Z_inter
-  ) %->% omega
-  
-  # Track the trace of omega
-  omega_trace[iter_, , ] <- omega
-  
-  
-  # Update alpha
-  update_alpha(
+  )
+  xi_trace <- torch_zeros(max_iter, J, L) # Trace of xi
+  xi_trace[1, , ] <- xi
+
+  current_elbo <- compute_elbo(
+    Y = Y,
+    Delta_matrices = Delta_matrices,
+    M_beta = M_beta,
+    V_beta = V_beta,
+    M_beta_prior = M_beta_prior,
+    V_beta_prior = V_beta_prior,
+    alpha = alpha,
     alpha_prior = alpha_prior,
-    E_Z = E_Z
-  ) %->% alpha
-  
-  # Track the trace of alpha
-  alpha_trace[iter_, ] <- alpha
-  cli_progress_update()
+    omega = omega,
+    omega_prior = omega_prior,
+    E_Z = E_Z,
+    E_Z_inter = E_Z_inter,
+    xi = xi
+  )
+  elbo_trace <- c(current_elbo)
 
+  # --------------------- Main loop --------------------- #
+  cli_progress_bar("Running CAVI...", total = max_iter, type = "tasks")
+  for (iter_ in seq(max_iter)) {
+    # Update Z
+    log_phi <- E_log_phi(Y,
+      M_beta = M_beta,
+      V_beta = V_beta,
+      xi = xi,
+      Delta_matrices = Delta_matrices
+    )
+
+    log_kappa <- E_log_pi(alpha)
+
+    log_eta <- E_log_omega(omega)
+
+    update_Z(log_phi, log_kappa, log_eta) %->% c(E_Z, E_Z_inter)
+
+    # Update beta
+    update_beta(
+      Y = Y,
+      K = K,
+      M_beta_prior = M_beta_prior,
+      V_beta_prior = V_beta_prior,
+      Delta_matrices = Delta_matrices,
+      E_Z = E_Z,
+      xi = xi
+    ) %->% c(M_beta, V_beta)
+
+    # Track the trace of beta
+    for (j in seq(J)) {
+      beta_trace[[j]][iter_, ] <- M_beta[[j]]
+    }
+
+    # Update xi
+    update_xi(
+      M_beta = M_beta,
+      V_beta = V_beta,
+      Delta_matrices = Delta_matrices
+    ) %->% xi
+
+    # Track the trace of xi
+    xi_trace[iter_, , ] <- xi
+
+
+    # Update omega
+    update_omega(
+      omega_prior = omega_prior,
+      E_Z_inter = E_Z_inter
+    ) %->% omega
+
+    # Track the trace of omega
+    omega_trace[iter_, , ] <- omega
+
+
+    # Update alpha
+    update_alpha(
+      alpha_prior = alpha_prior,
+      E_Z = E_Z
+    ) %->% alpha
+
+    # Track the trace of alpha
+    alpha_trace[iter_, ] <- alpha
+
+    current_elbo <- compute_elbo(
+      Y = Y,
+      Delta_matrices = Delta_matrices,
+      M_beta = M_beta,
+      V_beta = V_beta,
+      M_beta_prior = M_beta_prior,
+      V_beta_prior = V_beta_prior,
+      alpha = alpha,
+      alpha_prior = alpha_prior,
+      omega = omega,
+      omega_prior = omega_prior,
+      E_Z = E_Z,
+      E_Z_inter = E_Z_inter,
+      xi = xi
+    )
+    elbo_trace <- c(elbo_trace, current_elbo)
+    cli_progress_update()
+  }
+
+  cli_progress_done()
+
+  end_time <- Sys.time()
+
+  # --------------------- Post-hoc analysis --------------------- #
+
+  post_hoc <- Q_recovery(
+    M_beta = M_beta,
+    V_beta = V_beta,
+    E_Z = E_Z,
+    alpha = 0.05,
+    Q_true = data$Q_matrix
+  )
+
+  # Q-matrix recovery
+  mean(post_hoc$Q_hat == data$Q_matrix)
+
+  # attribute accuracy
+  profile_acc <- colSums(post_hoc$profiles_index == data$profiles_index) / nrow(data$profiles_index)
+
+  # beta recovery
+  M_beta_true <- array(0, dim = c(J, K + 1))
+  for (j in seq(J)) {
+    M_beta_true[j, c(TRUE, data$Q_matrix[j, ] == 1)] <- data$beta[[j]]
+  }
+
+  plot(post_hoc$M_beta, M_beta_true)
+  abline(0, 1)
 }
-cli_progress_done()
-end_time <- Sys.time()
 
-
-Q_hat <- Q_recovery(M_beta = M_beta, 
-                    V_beta = V_beta, 
-                    alpha = 0.05,
-                    Q_true = data$Q_matrix)
-
-
-
-
-
-
-
+HMLCDM_VB(data)
