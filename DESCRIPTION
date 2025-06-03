@@ -1,0 +1,25 @@
+Package: HMLCDM
+Title: Variational Inference Algorithm for Hidden Markov Longitudinal Cognitive Diagnostic Models
+Version: 0.1.0
+Authors@R: 
+    person("Hao", "Duan", , "hduan7@ucla.edu", role = c("aut", "cre"))
+Description: Implements a variational inference algorithm for Hidden Markov 
+    Longitudinal Cognitive Diagnostic Models using R with a torch backend. 
+    This package provides tools for fitting and analyzing cognitive diagnostic 
+    models with longitudinal data structures.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends: R (>= 4.1.0)
+Imports:
+    torch,
+    zeallot,
+    iterpc,
+    cli
+Suggests:
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+URL: https://github.com/edwardduanhao/HMLCDM
+BugReports: https://github.com/edwardduanhao/HMLCDM/issues

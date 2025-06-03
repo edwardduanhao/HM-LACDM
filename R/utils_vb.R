@@ -1,5 +1,3 @@
-source("utils.R")
-require(iterpc)
 
 # ---------------------------------------------------------------------------------------------------- #
 
@@ -187,6 +185,13 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
                        alpha_level = 0.05, # significance level
                        Q_true = NULL # array, shape = (J, K)
 ) {
+
+  I <- E_Z$shape[1]
+
+  indT <- E_Z$shape[2]
+
+  J <- length(M_beta)
+
   # re-format beta
 
   beta_hat <- sapply(M_beta, \(x) as_array(x)) |> t()
@@ -251,7 +256,7 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
   }
 
   if (!any(sig)) {
-    warning("No attribute passed the BH threshold at α = ", alpha_level, ".")
+    warning("No attribute passed the BH threshold at alpha = ", alpha_level, ".")
 
     Q_hat <- matrix(0L, J, K)
   } else {
@@ -291,11 +296,11 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
 
 
     beta_hat_permuted <- cbind(beta_hat_intercept, beta_hat_main[, idx_best])
-    
+
     colnames(beta_hat_permuted) <- NULL
 
     beta_hat_sd_permuted <- cbind(beta_hat_sd_intercept, beta_hat_sd_main[, idx_best])
-    
+
     colnames(beta_hat_sd_permuted) <- NULL
 
     beta_hat_trace_permuted <- array(dim = dim(beta_hat_trace))
@@ -305,10 +310,6 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
     beta_hat_trace_permuted[, , 2:(K + 1)] <- beta_hat_trace_main[, , idx_best]
 
     Q_hat <- Q_hat_best
-
-    I <- E_Z$shape[1]
-
-    indT <- E_Z$shape[2]
 
     profiles_index <- sapply(seq(indT), \(t)
     sapply(seq(I), \(i) {

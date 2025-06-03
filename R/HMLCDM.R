@@ -1,5 +1,5 @@
-source("utils.R")
-source("utils_vb.R")
+
+# variational inference for the HMLCDM model
 
 HMLCDM_VB <- function(data,
                       max_iter = 100,
@@ -271,18 +271,3 @@ HMLCDM_VB <- function(data,
   }
   return(res)
 }
-
-res <- HMLCDM_VB(data = data,
-                      max_iter = 100,
-                      alpha_level = 0.01,
-                      elbo = TRUE)
-
-# data1 <- data
-# data1$ground_truth <- NULL
-# 
-# res1 <- HMLCDM_VB(
-#   data = data1,
-#   max_iter = 100,
-#   alpha_level = 0.01,
-#   elbo = TRUE
-# )

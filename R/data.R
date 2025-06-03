@@ -1,6 +1,6 @@
-source("utils.R")
 
 # data generate function for simulation study
+
 data_generate <- function(I, # number of respondents
                           K, # number of latent attributes
                           J, # number of items
@@ -10,17 +10,17 @@ data_generate <- function(I, # number of respondents
                           Q_mat = NULL # generate a random Q-matrix if NULL
 ) {
   # if the seed is not NULL, set the seed; otherwise, we do not set the seed
-  
+
   if (!is.null(seed)) {
     torch_manual_seed(seed = seed)
   }
 
   # number of possible attribute profiles
-  
+
   L <- 2^K
 
   # generate Q-Matrix if it is not given
-  
+
   if (is.null(Q_mat)) {
     Q_mat <- torch_randint(
       low = 1, # inclusive
@@ -38,7 +38,7 @@ data_generate <- function(I, # number of respondents
   }
 
   # generate the delta matrix for each item
-  
+
   Delta_matrices <- lapply(seq(J), \(j) build_delta(
     q = Q_mat[j, ],
     interact = FALSE
@@ -46,7 +46,7 @@ data_generate <- function(I, # number of respondents
     torch_tensor())
 
   # generate the beta vector for each item
-  
+
   beta <- rowSums(Q_mat) |>
     lapply(\(s) build_beta(
       K = s
@@ -55,19 +55,19 @@ data_generate <- function(I, # number of respondents
 
 
   # initial distribution of the latent attributes
-  
+
   pii <- torch_ones(L, dtype = torch_float()) / L
   # pii <- nnf_softmax(torch_randn(L, dtype = torch_float()), 1) # random initial distribution
 
   # transition probability for each attribute
-  
+
   kernel_mat <- matrix(c(0.3, 0.7, 0.2, 0.8),
     nrow = 2,
     byrow = TRUE
   )
 
   # construct tau matrix from kernel_mat
-  
+
   tau <- torch_ones(L, L, dtype = torch_float())
 
   for (l_prev in seq(L)) {
@@ -82,11 +82,11 @@ data_generate <- function(I, # number of respondents
   }
 
   # Sample the latent attribute profiles over time
-  
+
   int_class <- array(0, c(I, indT))
 
   # t = 1
-  
+
   int_class[, 1] <- torch_multinomial(pii,
     num_samples = I,
     replacement = TRUE
@@ -94,7 +94,7 @@ data_generate <- function(I, # number of respondents
     as_array()
 
   # t > 1
-  
+
   for (t in seq(2, indT)) {
     for (l in seq(L)) {
       index <- int_class[, t - 1] == l
@@ -107,7 +107,7 @@ data_generate <- function(I, # number of respondents
   }
 
   # generate Response Matrix Y
-  
+
   Y <- torch_zeros(N_dataset, I, indT, J)
 
   for (t in 1:indT) {
@@ -125,9 +125,9 @@ data_generate <- function(I, # number of respondents
   }
 
   # convert int_class to profiles_mat
-  
+
   profiles_mat <- array(0, c(I, indT, K))
-  
+
   for (t in seq(indT)) {
     for (i in seq(I)) {
       profiles_mat[i, t, ] <- intToBin(int_class[i, t] - 1, d = K)
@@ -147,19 +147,5 @@ data_generate <- function(I, # number of respondents
     "Y" = as_array(Y),
     "K" = K,
     "ground_truth" = ground_truth
-  )
-}
-
-if (TRUE) {
-  Q_mat <- as.matrix(read.table("Q_Matrix/Q_3.txt"))
-  # Q_mat <- NULL
-  data <- data_generate(
-    I = 100,
-    K = 3,
-    J = 21,
-    indT = 3,
-    N_dataset = 1,
-    seed = 2025,
-    Q_mat = Q_mat
   )
 }
