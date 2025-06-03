@@ -2,26 +2,31 @@ library(torch)
 library(zeallot)
 source("utils.R")
 
-# Data generate function for simulation study
-data_generate <- function(I, # Number of respondents
-                          K, # Number of latent attributes
-                          J, # Number of items
-                          indT, # Number of time points
-                          N_dataset = 1, # Number of datasets to generate
-                          seed = NULL, # Seed for reproducibility
-                          Q_mat = NULL # Generate a random Q-matrix if NULL
+# data generate function for simulation study
+data_generate <- function(I, # number of respondents
+                          K, # number of latent attributes
+                          J, # number of items
+                          indT, # number of time points
+                          N_dataset = 1, # number of datasets to generate
+                          seed = NULL, # seed for reproducibility
+                          Q_mat = NULL # generate a random Q-matrix if NULL
 ) {
+  # if the seed is not NULL, set the seed; otherwise, we do not set the seed
   
-  # If the seed is not NULL, set the seed; otherwise, we do not set the seed
   if (!is.null(seed)) {
     torch_manual_seed(seed = seed)
   }
+
+  # number of possible attribute profiles
   
-  # Generate Q-Matrix if it is not given
+  L <- 2^K
+
+  # generate Q-Matrix if it is not given
+  
   if (is.null(Q_mat)) {
     Q_mat <- torch_randint(
       low = 1, # inclusive
-      high = 2^K, # exclusive
+      high = L, # exclusive
       size = J
     ) |>
       as_array() |>
@@ -33,62 +38,85 @@ data_generate <- function(I, # Number of respondents
       ) |>
       t()
   }
+
+  # generate the delta matrix for each item
   
-  # Generate the delta matrix for each item
   Delta_matrices <- lapply(seq(J), \(j) build_delta(
     q = Q_mat[j, ],
     interact = FALSE
   ) |>
     torch_tensor())
+
+  # generate the beta vector for each item
   
-  # Generate the beta vector for each item
   beta <- rowSums(Q_mat) |>
     lapply(\(s) build_beta(
       K = s
     ) |>
       torch_tensor())
+
+
+  # initial distribution of the latent attributes
   
+  pii <- torch_ones(L, dtype = torch_float()) / L
+
+  # transition probability for each attribute
   
-  # Initial distribution of the latent attributes
-  pii <- torch_ones(2^K, dtype = torch_float()) / 2^K
+  kernel_mat <- matrix(c(0.3, 0.7, 0.2, 0.8),
+    nrow = 2,
+    byrow = TRUE
+  )
+
+  # construct omega matrix from kernel_mat
   
-  # Transition probability
-  kernel_mat <- matrix(c(0.3, 0.7, 0.2, 0.8), nrow = 2, byrow = TRUE)
-  
-  omega <- torch_ones(2^K, 2^K, dtype = torch_float())
-  
-  for (l_prev in seq(2^K)){
+  omega <- torch_ones(L, L, dtype = torch_float())
+
+  for (l_prev in seq(L)) {
     profile_prev <- intToBin(l_prev - 1, d = K)
-    for (l_after in seq(2^K)){
+    for (l_after in seq(L)) {
       profile_after <- intToBin(l_after - 1, d = K)
-      for (k in seq(K)){
-        omega[l_prev, l_after] <- omega[l_prev, l_after] * 
+      for (k in seq(K)) {
+        omega[l_prev, l_after] <- omega[l_prev, l_after] *
           kernel_mat[profile_prev[k] + 1, profile_after[k] + 1]
       }
     }
   }
-  
+
   # Sample the latent attribute profiles over time
+  
   int_class <- array(0, c(I, indT))
-  
+
   # t = 1
-  int_class[,1] <- as_array(torch_multinomial(pii, I, replacement=TRUE))
   
+  int_class[, 1] <- torch_multinomial(pii,
+    num_samples = I,
+    replacement = TRUE
+  ) |>
+    as_array()
+
   # t > 1
-  for (t in seq(2, indT)){
-    for (l in seq(2^K)){
+  
+  for (t in seq(2, indT)) {
+    for (l in seq(L)) {
       index <- int_class[, t - 1] == l
-      int_class[index, t] <- as_array(torch_multinomial(omega[l, ], as.integer(sum(index)), replacement = TRUE))
+      int_class[index, t] <- torch_multinomial(omega[l, ],
+        num_samples = as.integer(sum(index)),
+        replacement = TRUE
+      ) |>
+        as_array()
     }
   }
+
+  # generate Response Matrix Y
   
-  # Generate Response Matrix Y
   Y <- torch_zeros(N_dataset, I, indT, J)
-  
+
   for (t in 1:indT) {
     for (j in 1:J) {
-      delta_matrix_t <- Delta_matrices[[j]][as.numeric(int_class[,t]), ]
-      Y_sampler <- (delta_matrix_t %@% beta[[j]]) |> torch_sigmoid() |> distr_bernoulli()
+      delta_matrix_t <- Delta_matrices[[j]][as.numeric(int_class[, t]), ]
+      Y_sampler <- (delta_matrix_t %@% beta[[j]]) |>
+        torch_sigmoid() |>
+        distr_bernoulli()
       Y[, , t, j] <- Y_sampler$sample(N_dataset)
     }
   }
@@ -96,45 +124,43 @@ data_generate <- function(I, # Number of respondents
   if (N_dataset == 1) {
     Y <- Y[1, , , ]
   }
+
+  # convert int_class to profiles_mat
   
-  # Convert int_class to profiles_mat
   profiles_mat <- array(0, c(I, indT, K))
+  
   for (t in seq(indT)) {
     for (i in seq(I)) {
       profiles_mat[i, t, ] <- intToBin(int_class[i, t] - 1, d = K)
     }
   }
-  
+
+  ground_truth <- list(
+    "Q_matrix" = Q_mat,
+    "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)),
+    "pii" = as_array(pii),
+    "omega" = as_array(omega),
+    "profiles_index" = int_class,
+    "profiles_mat" = profiles_mat
+  )
+
   list(
     "Y" = as_array(Y),
     "K" = K,
-    "profiles_mat" = profiles_mat,
-    "profiles_index" = int_class,
-    "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)),
-    "Q_matrix" = Q_mat,
-    "folder_name" = paste("I", I, "K", K, "J", J, "T", indT, sep = "_")
+    "ground_truth" = ground_truth
   )
 }
 
 if (TRUE) {
   Q_mat <- as.matrix(read.table("Q_Matrix/Q_3.txt"))
+  # Q_mat <- NULL
   data <- data_generate(
-    I = 1000,
+    I = 100,
     K = 3,
     J = 21,
-    indT = 4,
+    indT = 3,
     N_dataset = 1,
     seed = 2025,
     Q_mat = Q_mat
   )
 }
-
-
-
-
-
-
-
-
-
-
