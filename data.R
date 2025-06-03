@@ -1,5 +1,3 @@
-library(torch)
-library(zeallot)
 source("utils.R")
 
 # data generate function for simulation study
@@ -59,6 +57,7 @@ data_generate <- function(I, # number of respondents
   # initial distribution of the latent attributes
   
   pii <- torch_ones(L, dtype = torch_float()) / L
+  # pii <- nnf_softmax(torch_randn(L, dtype = torch_float()), 1) # random initial distribution
 
   # transition probability for each attribute
   
@@ -67,16 +66,16 @@ data_generate <- function(I, # number of respondents
     byrow = TRUE
   )
 
-  # construct omega matrix from kernel_mat
+  # construct tau matrix from kernel_mat
   
-  omega <- torch_ones(L, L, dtype = torch_float())
+  tau <- torch_ones(L, L, dtype = torch_float())
 
   for (l_prev in seq(L)) {
     profile_prev <- intToBin(l_prev - 1, d = K)
     for (l_after in seq(L)) {
       profile_after <- intToBin(l_after - 1, d = K)
       for (k in seq(K)) {
-        omega[l_prev, l_after] <- omega[l_prev, l_after] *
+        tau[l_prev, l_after] <- tau[l_prev, l_after] *
           kernel_mat[profile_prev[k] + 1, profile_after[k] + 1]
       }
     }
@@ -99,7 +98,7 @@ data_generate <- function(I, # number of respondents
   for (t in seq(2, indT)) {
     for (l in seq(L)) {
       index <- int_class[, t - 1] == l
-      int_class[index, t] <- torch_multinomial(omega[l, ],
+      int_class[index, t] <- torch_multinomial(tau[l, ],
         num_samples = as.integer(sum(index)),
         replacement = TRUE
       ) |>
@@ -139,7 +138,7 @@ data_generate <- function(I, # number of respondents
     "Q_matrix" = Q_mat,
     "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)),
     "pii" = as_array(pii),
-    "omega" = as_array(omega),
+    "tau" = as_array(tau),
     "profiles_index" = int_class,
     "profiles_mat" = profiles_mat
   )

@@ -1,9 +1,5 @@
 source("utils.R")
 source("utils_vb.R")
-require(cli)
-require(zeallot)
-require(torch)
-require(iterpc)
 
 HMLCDM_VB <- function(data,
                       max_iter = 100,
@@ -210,14 +206,18 @@ HMLCDM_VB <- function(data,
 
   if (is.null(data$ground_truth)) {
     res <- list(
-      "beta_hat" = sapply(M_beta, \(x) as_array(x)) |> t(),
-      "beta_hat_sd" = lapply(V_beta, \(v) torch_sqrt(v)),
+      "beta" = sapply(M_beta, \(x) as_array(x)) |> t(),
+      "beta_sd" = lapply(V_beta, \(v) torch_sqrt(v)),
       "profiles_index_hat" = E_Z$argmax(dim = 3),
-      "alpha" = as_array(alpha),
-      "omega" = as_array(omega),
+      "pii" = as_array(alpha / alpha$sum()),
+      "tau" = as_array(omega / omega$sum(2)$unsqueeze(2)),
+      "alpha_trace" = as_array(alpha_trace),
+      "omega_trace" = as_array(omega_trace),
+      "beta_trace" = torch_stack(beta_trace) |> torch_transpose(1, 2) |> as_array(),
       "Q_hat" = Q_recovery(
         M_beta = M_beta,
         V_beta = V_beta,
+        beta_hat_trace = beta_trace,
         E_Z = E_Z,
         alpha_level = alpha_level,
         Q_true = NULL
@@ -228,6 +228,7 @@ HMLCDM_VB <- function(data,
     post_hoc <- Q_recovery(
       M_beta = M_beta,
       V_beta = V_beta,
+      beta_hat_trace = beta_trace,
       E_Z = E_Z,
       alpha_level = alpha_level,
       Q_true = data$ground_truth$Q_matrix
@@ -250,15 +251,18 @@ HMLCDM_VB <- function(data,
     ord_map <- sapply(seq(L), \(l) sum(intToBin(l - 1, K) * 2^(post_hoc$ord - 1)) + 1)
 
     res <- list(
-      "beta_hat" = post_hoc$beta_hat,
-      "beta_hat_sd" = post_hoc$beta_hat_sd,
+      "beta" = post_hoc$beta_hat,
+      "beta_sd" = post_hoc$beta_hat_sd,
       "beta_true" = M_beta_true,
+      "beta_trace" = post_hoc$beta_hat_trace,
       "Q_hat" = post_hoc$Q_hat,
       "Q_acc" = post_hoc$acc,
       "profiles_index_hat" = post_hoc$profiles_index,
       "profiles_acc" = profile_acc,
-      "alpha" = as_array(alpha / alpha$sum())[ord_map],
-      "omega" = as_array(omega / omega$sum(2)$unsqueeze(2))[ord_map, ord_map],
+      "pii" = as_array(alpha / alpha$sum())[ord_map],
+      "tau" = as_array(omega / omega$sum(2)$unsqueeze(2))[ord_map, ord_map],
+      "alpha_trace" = as_array(alpha_trace)[, ord_map],
+      "omega_trace" = as_array(omega_trace)[, ord_map, ord_map],
       "runtime" = as.numeric(difftime(end_time, start_time, units = "secs"))
     )
   }
@@ -268,4 +272,17 @@ HMLCDM_VB <- function(data,
   return(res)
 }
 
-res <- HMLCDM_VB(data, elbo = FALSE)
+res <- HMLCDM_VB(data = data,
+                      max_iter = 100,
+                      alpha_level = 0.01,
+                      elbo = TRUE)
+
+# data1 <- data
+# data1$ground_truth <- NULL
+# 
+# res1 <- HMLCDM_VB(
+#   data = data1,
+#   max_iter = 100,
+#   alpha_level = 0.01,
+#   elbo = TRUE
+# )

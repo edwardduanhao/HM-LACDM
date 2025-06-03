@@ -1,4 +1,5 @@
 source("utils.R")
+require(iterpc)
 
 # ---------------------------------------------------------------------------------------------------- #
 
@@ -181,6 +182,7 @@ E_log_phi <- function(Y, # tensor, shape = (I, indT, J)
 
 Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
                        V_beta, # list of length J, covariance matrix of beta posteriors
+                       beta_hat_trace, # matrix, shape = (max_iter, J, K + 1)
                        E_Z, # tensor, shape = (I, indT, L)
                        alpha_level = 0.05, # significance level
                        Q_true = NULL # array, shape = (J, K)
@@ -190,6 +192,10 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
   beta_hat <- sapply(M_beta, \(x) as_array(x)) |> t()
 
   beta_hat_sd <- sapply(V_beta, \(x) sqrt(as_array(torch_diag(x)))) |> t()
+
+  beta_hat_trace <- torch_stack(beta_hat_trace) |>
+    torch_transpose(1, 2) |>
+    as_array()
 
   K <- ncol(beta_hat) - 1
 
@@ -205,11 +211,15 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
 
       beta_hat_sd_main <- beta_hat_sd[, -i]
 
+      beta_hat_trace_main <- beta_hat_trace[, , -i]
+
       intercept_detected <- TRUE
 
-      beta_intercept <- beta_hat[, i]
+      beta_hat_intercept <- beta_hat[, i]
 
-      beta_sd_intercept <- beta_hat_sd[, i]
+      beta_hat_sd_intercept <- beta_hat_sd[, i]
+
+      beta_hat_trace_intercept <- beta_hat_trace[, , i]
 
       break
     }
@@ -280,9 +290,19 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
     }
 
 
-    mean_beta_permuted <- cbind(beta_intercept, beta_hat_main[, idx_best])
+    beta_hat_permuted <- cbind(beta_hat_intercept, beta_hat_main[, idx_best])
+    
+    colnames(beta_hat_permuted) <- NULL
 
-    sd_beta_permuted <- cbind(beta_sd_intercept, beta_hat_sd_main[, idx_best])
+    beta_hat_sd_permuted <- cbind(beta_hat_sd_intercept, beta_hat_sd_main[, idx_best])
+    
+    colnames(beta_hat_sd_permuted) <- NULL
+
+    beta_hat_trace_permuted <- array(dim = dim(beta_hat_trace))
+
+    beta_hat_trace_permuted[, , 1] <- beta_hat_trace_intercept
+
+    beta_hat_trace_permuted[, , 2:(K + 1)] <- beta_hat_trace_main[, , idx_best]
 
     Q_hat <- Q_hat_best
 
@@ -294,12 +314,13 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
     sapply(seq(I), \(i) {
       sum(intToBin(as.numeric(E_Z[i, t, ]$argmax()) - 1, K) * 2^(idx_best - 1)) + 1
     }))
-    
+
     return(list(
       "Q_hat" = Q_hat,
       "acc" = acc,
-      "beta_hat" = mean_beta_permuted,
-      "beta_hat_sd" = sd_beta_permuted,
+      "beta_hat" = beta_hat_permuted,
+      "beta_hat_sd" = beta_hat_sd_permuted,
+      "beta_hat_trace" = beta_hat_trace_permuted,
       "profiles_index" = profiles_index,
       "ord" = idx_best
     ))
