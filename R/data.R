@@ -56,12 +56,12 @@ data_generate <- function(I, # number of respondents
 
   # initial distribution of the latent attributes
 
-  pii <- torch_ones(L, dtype = torch_float()) / L
-  # pii <- nnf_softmax(torch_randn(L, dtype = torch_float()), 1) # random initial distribution
+  # pii <- torch_ones(L, dtype = torch_float()) / L
+  pii <- nnf_softmax(torch_randn(L, dtype = torch_float()), 1) # random initial distribution
 
   # transition probability for each attribute
 
-  kernel_mat <- matrix(c(0.3, 0.7, 0.2, 0.8),
+  kernel_mat <- matrix(c(0.3, 0.7, 0.6, 0.4),
     nrow = 2,
     byrow = TRUE
   )
