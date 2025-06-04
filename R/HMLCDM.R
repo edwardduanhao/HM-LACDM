@@ -218,7 +218,6 @@ HMLCDM_VB <- function(data,
         M_beta = M_beta,
         V_beta = V_beta,
         beta_hat_trace = beta_trace,
-        E_Z = E_Z,
         alpha_level = alpha_level,
         Q_true = NULL
       ),
@@ -229,14 +228,9 @@ HMLCDM_VB <- function(data,
       M_beta = M_beta,
       V_beta = V_beta,
       beta_hat_trace = beta_trace,
-      E_Z = E_Z,
       alpha_level = alpha_level,
       Q_true = data$ground_truth$Q_matrix
     )
-
-    # attribute accuracy
-
-    profile_acc <- colMeans(post_hoc$profiles_index == data$ground_truth$profiles_index)
 
     # beta recovery
 
@@ -250,6 +244,12 @@ HMLCDM_VB <- function(data,
 
     ord_map <- sapply(seq(L), \(l) sum(intToBin(l - 1, K) * 2^(post_hoc$ord - 1)) + 1)
 
+    # attribute accuracy
+
+    profiles_index <- matrix(ord_map[as_array(E_Z$argmax(dim = 3))], nrow = I)
+
+    profile_acc <- colMeans(profiles_index == data$ground_truth$profiles_index)
+
     res <- list(
       "beta" = post_hoc$beta_hat,
       "beta_sd" = post_hoc$beta_hat_sd,
@@ -257,7 +257,7 @@ HMLCDM_VB <- function(data,
       "beta_trace" = post_hoc$beta_hat_trace,
       "Q_hat" = post_hoc$Q_hat,
       "Q_acc" = post_hoc$acc,
-      "profiles_index_hat" = post_hoc$profiles_index,
+      "profiles_index_hat" = profiles_index,
       "profiles_acc" = profile_acc,
       "pii" = as_array(alpha / alpha$sum())[ord_map],
       "tau" = as_array(omega / omega$sum(2)$unsqueeze(2))[ord_map, ord_map],

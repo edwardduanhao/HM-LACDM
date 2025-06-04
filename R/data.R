@@ -1,4 +1,3 @@
-
 # data generate function for simulation study
 
 data_generate <- function(I, # number of respondents
@@ -61,7 +60,7 @@ data_generate <- function(I, # number of respondents
 
   # transition probability for each attribute
 
-  kernel_mat <- matrix(c(0.3, 0.7, 0.6, 0.4),
+  kernel_mat <- matrix(c(0.7, 0.3, 0.2, 0.8),
     nrow = 2,
     byrow = TRUE
   )

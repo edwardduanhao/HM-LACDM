@@ -181,14 +181,9 @@ E_log_phi <- function(Y, # tensor, shape = (I, indT, J)
 Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
                        V_beta, # list of length J, covariance matrix of beta posteriors
                        beta_hat_trace, # matrix, shape = (max_iter, J, K + 1)
-                       E_Z, # tensor, shape = (I, indT, L)
                        alpha_level = 0.05, # significance level
                        Q_true = NULL # array, shape = (J, K)
 ) {
-
-  I <- E_Z$shape[1]
-
-  indT <- E_Z$shape[2]
 
   J <- length(M_beta)
 
@@ -311,18 +306,12 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
 
     Q_hat <- Q_hat_best
 
-    profiles_index <- sapply(seq(indT), \(t)
-    sapply(seq(I), \(i) {
-      sum(intToBin(as.numeric(E_Z[i, t, ]$argmax()) - 1, K) * 2^(idx_best - 1)) + 1
-    }))
-
     return(list(
       "Q_hat" = Q_hat,
       "acc" = acc,
       "beta_hat" = beta_hat_permuted,
       "beta_hat_sd" = beta_hat_sd_permuted,
       "beta_hat_trace" = beta_hat_trace_permuted,
-      "profiles_index" = profiles_index,
       "ord" = idx_best
     ))
   }
