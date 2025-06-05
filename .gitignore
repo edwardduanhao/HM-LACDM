@@ -1,5 +1,4 @@
-.Rhistory
-.RData
-.DS_Store
-.Rproj.user
-.RData
+*.Rhistory
+*.RData
+*.DS_Store
+*.Rproj.user
