@@ -6,10 +6,13 @@ data_generate <- function(I, # number of respondents
                           indT, # number of time points
                           N_dataset = 1, # number of datasets to generate
                           seed = NULL, # seed for reproducibility
-                          Q_mat = NULL # generate a random Q-matrix if NULL
+                          Q_mat = NULL, # generate a random Q-matrix if NULL
+                          device = "auto" # "auto", "cpu", or "cuda"
 ) {
+  # setup device
+  device <- get_device(device)
+  
   # if the seed is not NULL, set the seed; otherwise, we do not set the seed
-
   if (!is.null(seed)) {
     torch_manual_seed(seed = seed)
   }
@@ -42,7 +45,7 @@ data_generate <- function(I, # number of respondents
     q = Q_mat[j, ],
     interact = FALSE
   ) |>
-    torch_tensor())
+    torch_tensor(device = device))
 
   # generate the beta vector for each item
 
@@ -50,13 +53,13 @@ data_generate <- function(I, # number of respondents
     lapply(\(s) build_beta(
       K = s
     ) |>
-      torch_tensor())
+      torch_tensor(device = device))
 
 
   # initial distribution of the latent attributes
 
-  # pii <- torch_ones(L, dtype = torch_float()) / L
-  pii <- nnf_softmax(torch_randn(L, dtype = torch_float()), 1) # random initial distribution
+  # pii <- torch_ones(L, dtype = torch_float(), device = device) / L
+  pii <- nnf_softmax(torch_randn(L, dtype = torch_float(), device = device), 1) # random initial distribution
 
   # transition probability for each attribute
 
@@ -67,7 +70,7 @@ data_generate <- function(I, # number of respondents
 
   # construct tau matrix from kernel_mat
 
-  tau <- torch_ones(L, L, dtype = torch_float())
+  tau <- torch_ones(L, L, dtype = torch_float(), device = device)
 
   for (l_prev in seq(L)) {
     profile_prev <- intToBin(l_prev - 1, d = K)
@@ -97,17 +100,20 @@ data_generate <- function(I, # number of respondents
   for (t in seq(2, indT)) {
     for (l in seq(L)) {
       index <- int_class[, t - 1] == l
-      int_class[index, t] <- torch_multinomial(tau[l, ],
-        num_samples = as.integer(sum(index)),
-        replacement = TRUE
-      ) |>
-        as_array()
+      n_samples <- as.integer(sum(index))
+      if (n_samples > 0) {
+        int_class[index, t] <- torch_multinomial(tau[l, ],
+          num_samples = n_samples,
+          replacement = TRUE
+        ) |>
+          as_array()
+      }
     }
   }
 
   # generate Response Matrix Y
 
-  Y <- torch_zeros(N_dataset, I, indT, J)
+  Y <- torch_zeros(N_dataset, I, indT, J, device = device)
 
   for (t in 1:indT) {
     for (j in 1:J) {

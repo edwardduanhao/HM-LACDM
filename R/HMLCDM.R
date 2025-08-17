@@ -1,24 +1,25 @@
+# Variational inference for the HMLCDM model
 
-# variational inference for the HMLCDM model
-
-HMLCDM_VB <- function(data,
-                      max_iter = 100,
-                      alpha_level = 0.05,
-                      elbo = FALSE # set to TRUE to compute the ELBO at each iteration
+hmlcdm_vb <- function(data,
+  max_iter = 100,
+  alpha_level = 0.05,
+  elbo = FALSE, # Set to TRUE to compute the ELBO at each iteration
+  device = "auto" # "auto", "cpu", or "cuda"
 ) {
-  # print the number of threads Torch is using
+  # Setup device
+  device <- get_device(device)
 
+  # Print the number of threads Torch is using
   print(paste("Torch is using", torch_get_num_threads(), "threads"))
 
   # setup a timer
-
   start_time <- Sys.time()
 
   # --------------------- Retrieve and format data --------------------- #
 
   # response matrix Y, shape (N, indT, J)
 
-  Y <- torch_tensor(data$Y)
+  Y <- torch_tensor(data$Y, device = device)
 
   # number of observations, number of time points, number of items
 
@@ -36,7 +37,7 @@ HMLCDM_VB <- function(data,
     q = rep(1, K),
     interact = FALSE
   ) |>
-    torch_tensor())
+    torch_tensor(device = device))
 
   beta_dim <- rep(K + 1, J)
 
@@ -44,39 +45,39 @@ HMLCDM_VB <- function(data,
 
   # beta
 
-  M_beta_prior <- lapply(beta_dim, \(d) torch_zeros(d)) # Mean
+  M_beta_prior <- lapply(beta_dim, \(d) torch_zeros(d, device = device)) # Mean
 
-  M_beta <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(1, K)))) # Mean
+  M_beta <- lapply(beta_dim, \(d) torch_tensor(c(-3, rep(1, K)), device = device)) # Mean
 
-  V_beta_prior <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
+  V_beta_prior <- lapply(beta_dim, \(d) torch_eye(d, device = device) * 1) # Covariance matrix
 
-  V_beta <- lapply(beta_dim, \(d) torch_eye(d) * 1) # Covariance matrix
+  V_beta <- lapply(beta_dim, \(d) torch_eye(d, device = device) * 1) # Covariance matrix
 
-  beta_trace <- lapply(beta_dim, \(d) torch_zeros(max_iter, d)) # Trace of beta
+  beta_trace <- lapply(beta_dim, \(d) torch_zeros(max_iter, d, device = device)) # Trace of beta
 
   # tau
 
-  omega_prior <- torch_ones(L, L, dtype = torch_float()) # Dirichlet priors
+  omega_prior <- torch_ones(L, L, dtype = torch_float(), device = device) # Dirichlet priors
 
-  omega <- torch_ones(L, L, dtype = torch_float())
+  omega <- torch_ones(L, L, dtype = torch_float(), device = device)
 
-  omega_trace <- torch_zeros(max_iter, L, L) # Trace of omega
+  omega_trace <- torch_zeros(max_iter, L, L, device = device) # Trace of omega
 
   # pi
 
-  alpha_prior <- torch_ones(L, dtype = torch_float()) # Dirichlet prior
+  alpha_prior <- torch_ones(L, dtype = torch_float(), device = device) # Dirichlet prior
 
-  alpha <- torch_ones(L, dtype = torch_float())
+  alpha <- torch_ones(L, dtype = torch_float(), device = device)
 
-  alpha_trace <- torch_zeros(max_iter, L) # Trace of alpha
+  alpha_trace <- torch_zeros(max_iter, L, device = device) # Trace of alpha
 
   # Z
 
-  E_Z <- torch_ones(I, indT, L) / L
+  E_Z <- torch_ones(I, indT, L, device = device) / L
 
-  E_Z_inter <- torch_ones(I, indT - 1, L, L) / (L * L)
+  E_Z_inter <- torch_ones(I, indT - 1, L, L, device = device) / (L * L)
 
-  E_Z_trace <- torch_zeros(max_iter, I, indT - 1, L) # Trace of Z
+  E_Z_trace <- torch_zeros(max_iter, I, indT - 1, L, device = device) # Trace of Z
 
   # xi
 
@@ -86,7 +87,7 @@ HMLCDM_VB <- function(data,
     Delta_matrices = Delta_matrices
   )
 
-  xi_trace <- torch_zeros(max_iter, J, L) # Trace of xi
+  xi_trace <- torch_zeros(max_iter, J, L, device = device) # Trace of xi
 
   xi_trace[1, , ] <- xi
 

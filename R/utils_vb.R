@@ -54,7 +54,9 @@ update_xi <- function(M_beta, # list of length J, mean of beta posteriors
 
   K <- M_beta[[1]]$shape - 1 # number of attributes
 
-  xi <- torch_zeros(J, 2^K)
+  # Use same device as input tensors
+  device <- M_beta[[1]]$device
+  xi <- torch_zeros(J, 2^K, device = device)
 
   for (j in seq(J)) {
     E_beta2 <- M_beta[[j]]$outer(M_beta[[j]]) + V_beta[[j]]
@@ -96,9 +98,11 @@ update_Z <- function(log_phi, # tensor, shape = (I, indT, L)
 ) {
   c(I, indT, L) %<-% log_phi$shape
 
-  log_f <- torch_zeros(c(I, indT, L), dtype = torch_float())
+  # Use same device as input tensors
+  device <- log_phi$device
+  log_f <- torch_zeros(c(I, indT, L), dtype = torch_float(), device = device)
 
-  log_b <- torch_zeros(c(I, indT, L), dtype = torch_float())
+  log_b <- torch_zeros(c(I, indT, L), dtype = torch_float(), device = device)
 
   log_f[, 1, ] <- log_kappa + log_phi[, 1, ]
 
@@ -156,10 +160,11 @@ E_log_phi <- function(Y, # tensor, shape = (I, indT, J)
   K <- M_beta[[1]]$shape - 1
 
   # compute the item-response part
+  # Use same device as input tensors
+  device <- Y$device
+  F_beta <- torch_zeros(J, 2^K, device = device)
 
-  F_beta <- torch_zeros(J, 2^K)
-
-  F_beta2 <- torch_zeros(J, 2^K)
+  F_beta2 <- torch_zeros(J, 2^K, device = device)
 
   for (j in seq(J)) {
     F_beta[j, ] <- Delta_matrices[[j]] %@% M_beta[[j]]
@@ -340,7 +345,9 @@ compute_elbo <- function(Y, # tensor, shape = (I, indT, J)
 
   indT <- Y$shape[2]
 
-  elbo <- torch_zeros(1, dtype = torch_float())
+  # Use same device as input tensors
+  device <- Y$device
+  elbo <- torch_zeros(1, dtype = torch_float(), device = device)
 
   log_phi <- E_log_phi(Y,
     M_beta = M_beta,
