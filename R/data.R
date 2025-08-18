@@ -7,7 +7,7 @@
 #' @param i Number of respondents/examinees
 #' @param k Number of latent cognitive attributes
 #' @param j Number of assessment items
-#' @param ind_t Number of time points in the longitudinal study
+#' @param t Number of time points in the longitudinal study
 #' @param n_dataset Number of datasets to generate (default: 1)
 #' @param seed Random seed for reproducibility (default: NULL)
 #' @param q_mat Optional Q-matrix specifying item-attribute relationships.
@@ -17,11 +17,11 @@
 #'
 #' @return A list containing:
 #'   \itemize{
-#'     \item Y: Response data array (individuals x time points x items)
-#'     \item K: Number of attributes (echoed from input)
+#'     \item y: Response data array (individuals x time points x items)
+#'     \item k: Number of attributes (echoed from input)
 #'     \item ground_truth: List with true parameters including:
 #'       \itemize{
-#'         \item Q_matrix: Item-attribute relationship matrix
+#'         \item q_mat: Item-attribute relationship matrix
 #'         \item beta: True item parameters
 #'         \item pii: Initial distribution of attribute profiles
 #'         \item tau: Transition probabilities between profiles
@@ -32,19 +32,19 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Generate data for 100 examinees, 3 attributes, 20 items, 5 time points
-#' sim_data <- data_generate(i = 100, k = 3, j = 20, ind_t = 5, seed = 123)
+#' # Generate data for 100 examinees, 2 attributes, 20 items, 2 time points
+#' sim_data <- data_generate(i = 100, k = 2, j = 20, t = 2, seed = 123)
 #'
 #' # Access response data
-#' responses <- sim_data$Y
+#' responses <- sim_data$y
 #'
-#' # View the true Q-matrix
-#' print(sim_data$ground_truth$Q_matrix)
+#' # View the true Q matrix
+#' print(sim_data$ground_truth$q_mat)
 #' }
 #'
 #' @export
 data_generate <- function(
-    i, k, j, ind_t, n_dataset = 1, seed = NULL, q_mat = NULL, device = "auto") {
+    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, device = "auto") {
   # Setup device
   device <- get_device(device)
 
@@ -76,7 +76,7 @@ data_generate <- function(
   }
 
   # Generate the delta matrix for each item
-  delta_matrices <- lapply(seq(j), \(j_iter) {
+  delta_mat <- lapply(seq(j), \(j_iter) {
     build_delta(
       q = q_mat[j_iter, ],
       interact = FALSE
@@ -120,7 +120,7 @@ data_generate <- function(
   }
 
   # Sample the latent attribute profiles over time
-  int_class <- array(0, c(i, ind_t))
+  int_class <- array(0, c(i, t))
 
   int_class[, 1] <- torch_multinomial(pii, # nolint
     num_samples = i,
@@ -128,7 +128,7 @@ data_generate <- function(
   ) |>
     as_array() # nolint
 
-  for (t_iter in seq(2, ind_t)) {
+  for (t_iter in seq(2, t)) {
     for (l_iter in seq(l)) {
       index <- int_class[, t_iter - 1] == l_iter
       n_samples <- as.integer(sum(index))
@@ -144,15 +144,15 @@ data_generate <- function(
 
   # Generate Response Matrix Y
 
-  y_mat <- torch_zeros(n_dataset, i, ind_t, j, device = device) # nolint
+  y_mat <- torch_zeros(n_dataset, i, t, j, device = device) # nolint
 
-  for (t in 1:ind_t) {
-    for (j in 1:j) {
-      delta_matrix_t <- delta_matrices[[j]][as.numeric(int_class[, t]), ]
-      y_sampler <- (delta_matrix_t %@% beta[[j]]) |>
+  for (t_iter in 1:t) {
+    for (j_iter in 1:j) {
+      delta_mat_t <- delta_mat[[j_iter]][as.numeric(int_class[, t_iter]), ]
+      y_sampler <- (delta_mat_t %@% beta[[j_iter]]) |>
         torch_sigmoid() |> # nolint
         distr_bernoulli() # nolint
-      y_mat[, , t, j] <- y_sampler$sample(n_dataset)
+      y_mat[, , t_iter, j_iter] <- y_sampler$sample(n_dataset)
     }
   }
 
@@ -162,16 +162,19 @@ data_generate <- function(
 
   # convert int_class to profiles_mat
 
-  profiles_mat <- array(0, c(i, ind_t, k))
+  profiles_mat <- array(0, c(i, t, k))
 
-  for (t in seq(ind_t)) {
-    for (i in seq(i)) {
-      profiles_mat[i, t, ] <- int_to_bin(int_class[i, t] - 1, d = k)
+  for (t_iter in seq(t)) {
+    for (i_iter in seq(i)) {
+      profiles_mat[i_iter, t_iter, ] <- int_to_bin(
+        x = int_class[i_iter, t_iter] - 1,
+        d = k
+      )
     }
   }
 
   ground_truth <- list(
-    "Q_matrix" = q_mat,
+    "q_mat" = q_mat,
     "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)), # nolint
     "pii" = as_array(pii),
     "tau" = as_array(tau),
@@ -180,8 +183,8 @@ data_generate <- function(
   )
 
   list(
-    "Y" = as_array(y_mat), # nolint
-    "K" = k,
+    "y" = as_array(y_mat), # nolint
+    "k" = k,
     "ground_truth" = ground_truth
   )
 }

@@ -2,4 +2,5 @@
 *.RData
 *.DS_Store
 *.Rproj.user
+*.pdf
 .Rproj.user
