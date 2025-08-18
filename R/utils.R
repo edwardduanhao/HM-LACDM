@@ -44,7 +44,7 @@ get_device <- function(device = "auto") {
 #' Matrix Multiplication Operator for Torch Tensors
 #'
 #' A custom infix operator that performs matrix multiplication between two torch
-#' tensors. This is a convenience function that wraps the 'torch_matmul' 
+#' tensors. This is a convenience function that wraps the 'torch_matmul'
 #' function.
 #'
 #' @param mat1 A torch tensor (left operand)

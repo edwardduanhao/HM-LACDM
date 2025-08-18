@@ -17,7 +17,7 @@
 #'
 #' @return A list containing:
 #'   \itemize{
-#'     \item y: Response data array (individuals x time points x items)
+#'     \item y: Response data array, shape (i, t, j)
 #'     \item k: Number of attributes (echoed from input)
 #'     \item ground_truth: List with true parameters including:
 #'       \itemize{

@@ -1,49 +1,123 @@
+# ------------------------------------------------------------------------- #
 
-# ---------------------------------------------------------------------------------------------------- #
-
-# Jordan-Jaakkola function
-JJ_func <- function(xi, epsilon = 1e-10) {
-  x <- torch_abs(xi) + epsilon
-  return(torch_tanh(x / 2) / (4 * x))
+#' Jaakkola-Jordan Lower Bound Function
+#'
+#' Computes the Jaakkola-Jordan lower bound function for variational inference
+#' with logistic regression. This function approximates the logistic function
+#' to enable tractable variational updates.
+#'
+#' @param xi A torch tensor containing the variational parameters
+#' @param epsilon A small positive value to avoid numerical instability
+#'   (default: 1e-10)
+#'
+#' @return A torch tensor with the same shape as xi containing the computed
+#'   Jaakkola-Jordan function values: tanh(|xi|/2) / (4 * |xi|)
+#'
+#' @details The Jaakkola-Jordan bound enables the use of conjugate variational
+#'   inference for logistic regression by providing a quadratic lower bound
+#'   for the logistic function.
+#'
+#' @references
+#' Jaakkola, T. S., & Jordan, M. I. (1997). A variational approach to Bayesian
+#' logistic regression models and their extensions.
+#'
+#' @examples
+#' \dontrun{
+#' xi <- torch_randn(5, 3)
+#' result <- jj_func(xi)
+#' }
+#'
+#' @importFrom torch torch_abs torch_tanh
+#' @export
+jj_func <- function(xi, epsilon = 1e-10) {
+  x <- torch_abs(xi) + epsilon # nolint
+  return(torch_tanh(x / 2) / (4 * x)) # nolint
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
-# updates for the item-response parameters (beta)
+#' Update Beta Parameters for Variational Inference
+#'
+#' Updates the variational posterior parameters for item-effect parameters
+#' (beta) in the Hidden Markov Log-Linear Cognitive Diagnostic Model using
+#' coordinate ascent variational inference.
+#'
+#' @param y A torch tensor of shape (I, T, J) containing binary response data,
+#'   where I is the number of individuals, T is the number of time points,
+#'   and J is the number of items
+#' @param k An integer specifying the number of attributes
+#' @param m_beta_prior A list of length J containing prior mean vectors for
+#'   beta parameters
+#' @param v_beta_prior A list of length J containing prior covariance matrices
+#'   for beta parameters
+#' @param delta_mat A list of length J containing design matrices for each item
+#' @param z A torch tensor of shape (I, T, L) containing expected latent class
+#'   memberships, where L = 2^k is the number of latent classes
+#' @param xi A torch tensor of shape (J, L) containing auxiliary variational
+#'   parameters for the Jaakkola-Jordan bound
+#'
+#' @return A list containing:
+#'   \itemize{
+#'     \item m_beta: List of length J with updated posterior mean vectors
+#'     \item v_beta: List of length J with updated posterior covariance matrices
+#'   }
+#'
+#' @details This function implements the coordinate ascent variational inference
+#'   update for the item-effect parameters in the HM-LCDM. The updates use the
+#'   Jaakkola-Jordan lower bound to handle the nonconjugate logistic likelihood.
+#'
+#' @examples
+#' \dontrun{
+#' # Assuming appropriate torch tensors and parameters are available
+#' result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi)
+#' updated_means <- result$m_beta
+#' updated_covariances <- result$v_beta
+#' }
+#'
+#' @importFrom torch torch_inverse torch_diag_embed torch_einsum
+#' @importFrom zeallot %<-%
+#' @export
+update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi) {
+  # Extract dimensions from response tensor
+  c(i, t, j) %<-% y$shape # nolint
 
-update_beta <- function(Y, # tensor, shape = (N, J, indT)
-                        K, # integer, number of attributes
-                        M_beta_prior, # list of length J, mean of beta priors
-                        V_beta_prior, # list of length J, covariance matrix of beta priors
-                        Delta_matrices, # list of length J, Delta matrices
-                        E_Z, # tensor, shape = (N, 2^(K * indT))
-                        xi # tensor, shape = (J, 2^K)
-) {
-  c(I, indT, J) %<-% Y$shape
+  # Sum over individuals and time points to get class weights
+  weights_z <- z$sum(c(1, 2))
 
-  L <- 2^K
+  # Initialize storage for posterior parameters
+  m_beta <- vector("list", j)
+  v_beta <- vector("list", j)
 
-  weights_z <- E_Z$sum(c(1, 2))
+  # Update parameters for each item
+  for (j_iter in seq(j)) {
+    delta_mat_j <- delta_mat[[j_iter]]
 
-  M_beta <- vector("list", J)
+    # Update posterior covariance matrix
+    v_beta[[j_iter]] <- torch_inverse( # nolint
+      v_beta_prior[[j_iter]]$inverse() +
+        2 * (
+          delta_mat_j$t() %@%
+            torch_diag_embed(weights_z * jj_func(xi[j_iter, ])) %@% # nolint
+            delta_mat_j
+        )
+    )
 
-  V_beta <- vector("list", J)
-
-  for (j in seq(J)) {
-    V_beta[[j]] <- torch_inverse(V_beta_prior[[j]]$inverse() +
-      2 * Delta_matrices[[j]]$t() %@% torch_diag_embed(weights_z * JJ_func(xi[j, ])) %@% Delta_matrices[[j]])
-
-    M_beta[[j]] <- V_beta[[j]] %@% (V_beta_prior[[j]]$inverse() %@% M_beta_prior[[j]] +
-      Delta_matrices[[j]]$t() %@% torch_einsum("ntl,nt->l", list(E_Z, Y[, , j] - 1 / 2)))
+    # Update posterior mean vector
+    m_beta[[j_iter]] <- v_beta[[j_iter]] %@% (
+      v_beta_prior[[j_iter]]$inverse() %@% m_beta_prior[[j_iter]] +
+        delta_mat_j$t() %@% torch_einsum( # nolint
+          "ntl,nt->l", list(z, y[, , j_iter] - 1 / 2)
+        )
+    )
   }
 
-  return(list(
-    "M_beta" = M_beta,
-    "V_beta" = V_beta
-  ))
+  list(
+    "m_beta" = m_beta,
+    "v_beta" = v_beta
+  )
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # updates for the auxiliary variables xi (item-response)
 update_xi <- function(M_beta, # list of length J, mean of beta posteriors
@@ -67,7 +141,7 @@ update_xi <- function(M_beta, # list of length J, mean of beta posteriors
   return(xi)
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # updates for the transition probabilities (omega)
 
@@ -77,7 +151,7 @@ update_omega <- function(omega_prior, # tensor, shape = (L, L)
   return(omega_prior + E_Z_inter$sum(c(1, 2)))
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # updates for the initial distribution of the latent attributes (alpha)
 
@@ -87,7 +161,7 @@ update_alpha <- function(alpha_prior, # tensor, shape = (L,)
   return(alpha_prior + E_Z[, 1, ]$sum(1))
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # updates for the latent attributes (Z)
 
@@ -127,7 +201,7 @@ update_Z <- function(log_phi, # tensor, shape = (I, indT, L)
   return(list(E_Z, E_Z_inter))
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # compute the expectation of log(pi)
 
@@ -136,7 +210,7 @@ E_log_pi <- function(alpha # tensor, shape = (L, )
   return(torch_digamma(alpha) - torch_digamma(alpha$sum()))
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # compute the expectation of log(omega)
 
@@ -145,7 +219,7 @@ E_log_omega <- function(omega # tensor, shape = (L, L)
   return(torch_digamma(omega) - torch_digamma(omega$sum(1)))
 }
 
-# ---------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------- #
 
 # compute the log(phi)
 
@@ -174,12 +248,12 @@ E_log_phi <- function(Y, # tensor, shape = (I, indT, J)
     F_beta2[j, ] <- (Delta_matrices[[j]] %@% E_beta2 %@% Delta_matrices[[j]]$t())$diagonal()
   }
 
-  log_phi <- ((Y$unsqueeze(-1) - 1 / 2) * F_beta + (nnf_logsigmoid(xi) - xi / 2 - JJ_func(xi) * (F_beta2 - xi$square())))$sum(dim = 3)
+  log_phi <- ((Y$unsqueeze(-1) - 1 / 2) * F_beta + (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) * (F_beta2 - xi$square())))$sum(dim = 3)
 
   return(log_phi)
 }
 
-# ------------------------------------------------------------------------------------------------------ #
+# ------------------------------------------------------------------------- #
 
 # post-hoc Q-matrix recovery
 
@@ -189,7 +263,6 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
                        alpha_level = 0.05, # significance level
                        Q_true = NULL # array, shape = (J, K)
 ) {
-
   J <- length(M_beta)
 
   # re-format beta
@@ -323,7 +396,7 @@ Q_recovery <- function(M_beta, # list of length J, mean of beta posteriors
   return(Q_hat)
 }
 
-# ------------------------------------------------------------------------------------------------------ #
+# ------------------------------------------------------------------------- #
 
 # compute the evidence lower bound (ELBO)
 
