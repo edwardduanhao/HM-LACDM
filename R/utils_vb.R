@@ -84,7 +84,7 @@ update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi) {
 
   # Initialize storage for posterior parameters
   m_beta <- vector("list", j)
-  
+
   v_beta <- vector("list", j)
 
   # Update parameters for each item
@@ -95,14 +95,14 @@ update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi) {
     v_beta[[j_iter]] <- torch_inverse( # nolint
       v_beta_prior[[j_iter]]$inverse() +
         2 * (
-          delta_mat_j$t() %@%
+          delta_mat_j$t() %@% # nolint
             torch_diag_embed(weights_z * jj_func(xi[j_iter, ])) %@% # nolint
             delta_mat_j
         )
     )
 
     # Update posterior mean vector
-    m_beta[[j_iter]] <- v_beta[[j_iter]] %@% (
+    m_beta[[j_iter]] <- v_beta[[j_iter]] %@% ( # nolint
       v_beta_prior[[j_iter]]$inverse() %@% m_beta_prior[[j_iter]] +
         delta_mat_j$t() %@% torch_einsum( # nolint
           "ntl,nt->l", list(z, y[, , j_iter] - 1 / 2)
@@ -197,8 +197,7 @@ update_xi <- function(m_beta, v_beta, delta_mat) {
 #' }
 #'
 #' @export
-update_omega <- function(omega_prior, e_zz
-) {
+update_omega <- function(omega_prior, e_zz) {
   omega_prior + e_zz$sum(c(1, 2))
 }
 
@@ -430,9 +429,10 @@ e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
                             delta_mat[[j_iter]]$t())$diagonal()
   }
 
-  log_phi <- ((y$unsqueeze(-1) - 1 / 2) * f_beta +
-                (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) # nolint
-                 * (f_beta2 - xi$square())))$sum(dim = 3)
+  log_phi <- (
+    (y$unsqueeze(-1) - 1 / 2) * f_beta +
+      (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) * (f_beta2 - xi$square())) # nolint
+  )$sum(dim = 3)
 
   log_phi
 }
@@ -478,15 +478,14 @@ e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
 #' @examples
 #' \dontrun{
 #' # Basic Q-matrix recovery
-#' q_mat_recovered <- q_mat_recovery(M_beta, V_beta, beta_trace)
+#' q_mat_recovered <- q_mat_recovery(m_beta, v_beta, beta_trace)
 #'
 #' # With true Q-matrix for evaluation
-#' result <- q_mat_recovery(M_beta, V_beta, beta_trace, q_mat_true = true_Q)
-#' best_Q <- result$q_mat_hat
+#' result <- q_mat_recovery(m_beta, v_beta, beta_trace, q_mat_true = true_Q)
+#' best_q_mat <- result$q_mat_hat
 #' accuracy <- result$acc
 #' }
 #'
-#' @importFrom stats pnorm
 #' @export
 q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
                            alpha_level = 0.05, q_mat_true = NULL) {
@@ -558,8 +557,10 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 
     q_mat_hat <- matrix(0L, j, k)
   } else {
-    q_mat_hat <- matrix(sig, nrow = nrow(beta_hat_main),
-                        ncol = ncol(beta_hat_main)) * 1L
+    q_mat_hat <- matrix(sig,
+      nrow = nrow(beta_hat_main),
+      ncol = ncol(beta_hat_main)
+    ) * 1L
   }
 
   if (!is.null(q_mat_true)) {
@@ -589,16 +590,21 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 
         idx_best <- idx
 
-        print(paste0("Permutating ... Best Q-Matrix recovery accuracy is ", round(acc * 100, 3), "%"))
+        print(paste0(
+          "Permutating ... Best Q-Matrix recovery accuracy is ",
+          round(acc * 100, 3), "%"
+        ))
       }
     }
-
 
     beta_hat_permuted <- cbind(beta_hat_intercept, beta_hat_main[, idx_best])
 
     colnames(beta_hat_permuted) <- NULL
 
-    beta_hat_sd_permuted <- cbind(beta_hat_sd_intercept, beta_hat_sd_main[, idx_best])
+    beta_hat_sd_permuted <- cbind(
+      beta_hat_sd_intercept,
+      beta_hat_sd_main[, idx_best]
+    )
 
     colnames(beta_hat_sd_permuted) <- NULL
 
@@ -606,20 +612,20 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 
     beta_hat_trace_permuted[, , 1] <- beta_hat_trace_intercept
 
-    beta_hat_trace_permuted[, , 2:(K + 1)] <- beta_hat_trace_main[, , idx_best]
+    beta_hat_trace_permuted[, , 2:(k + 1)] <- beta_hat_trace_main[, , idx_best]
 
-    Q_hat <- Q_hat_best
+    q_mat_hat <- q_mat_hat_best
 
-    return(list(
-      "Q_hat" = Q_hat,
+    list(
+      "Q_hat" = q_mat_hat,
       "acc" = acc,
       "beta_hat" = beta_hat_permuted,
       "beta_hat_sd" = beta_hat_sd_permuted,
       "beta_hat_trace" = beta_hat_trace_permuted,
       "ord" = idx_best
-    ))
+    )
   }
-  return(Q_hat)
+  q_mat_hat
 }
 
 # ------------------------------------------------------------------------- #
@@ -631,18 +637,18 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 #' a lower bound on the log marginal likelihood and is used to monitor
 #' convergence and assess model fit.
 #'
-#' @param Y A torch tensor of shape (i, t, j) containing binary response data,
-#'   where i is the number of individuals, t is the number of time points,
+#' @param y A torch tensor of shape (i, t, j) containing binary response,
+#'   data where i is the number of individuals, t is the number of time points,
 #'   and j is the number of items
-#' @param Delta_matrices A list of length j containing design matrices for
+#' @param delta_mat A list of length j containing design matrices for
 #'   each item, where each element is a torch tensor of shape (l, k+1)
-#' @param M_beta A list of length j containing posterior mean vectors for
+#' @param m_beta A list of length j containing posterior mean vectors for
 #'   item-effect parameters (beta)
-#' @param V_beta A list of length j containing posterior covariance matrices
+#' @param v_beta A list of length j containing posterior covariance matrices
 #'   for item-effect parameters (beta)
-#' @param M_beta_prior A list of length j containing prior mean vectors for
+#' @param m_beta_prior A list of length j containing prior mean vectors for
 #'   item-effect parameters (beta)
-#' @param V_beta_prior A list of length j containing prior covariance matrices
+#' @param v_beta_prior A list of length j containing prior covariance matrices
 #'   for item-effect parameters (beta)
 #' @param alpha A torch tensor of shape (l,) containing posterior Dirichlet
 #'   parameters for the initial distribution, where l = 2^k
@@ -652,9 +658,9 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 #'   parameters for the transition matrix
 #' @param omega_prior A torch tensor of shape (l, l) containing prior Dirichlet
 #'   parameters for the transition matrix
-#' @param E_Z A torch tensor of shape (i, t, l) containing expected latent
+#' @param e_z A torch tensor of shape (i, t, l) containing expected latent
 #'   class memberships
-#' @param E_Z_inter A torch tensor of shape (i, t-1, l, l) containing expected
+#' @param e_zz A torch tensor of shape (i, t-1, l, l) containing expected
 #'   transition counts between consecutive time points
 #' @param xi A torch tensor of shape (j, l) containing auxiliary variational
 #'   parameters for the Jaakkola-Jordan bound
@@ -669,62 +675,67 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 #' @examples
 #' \dontrun{
 #' # Assuming all required tensors and parameters are available
-#' elbo_value <- compute_elbo(Y, Delta_matrices, M_beta, V_beta,
-#'                           M_beta_prior, V_beta_prior, alpha, alpha_prior,
-#'                           omega, omega_prior, E_Z, E_Z_inter, xi)
+#' elbo_value <- compute_elbo(
+#'   y, delta_mat, m_beta, v_beta,
+#'   m_beta_prior, v_beta_prior, alpha, alpha_prior,
+#'   omega, omega_prior, e_z, e_zz, xi
+#' )
 #' }
 #'
 #' @export
-compute_elbo <- function(Y, # tensor, shape = (I, indT, J)
-  Delta_matrices, # list of length J, Delta matrices
-  M_beta, # list of length J, mean of beta posteriors
-  V_beta, # list of length J, covariance matrix of beta posteriors
-  M_beta_prior, # list of length J, mean of beta priors
-  V_beta_prior, # list of length J, covariance matrix of beta priors
-  alpha, # tensor, shape = (L,)
-  alpha_prior, # tensor, shape = (L,)
-  omega, # tensor, shape = (L,L)
-  omega_prior, # tensor, shape = (L,L)
-  E_Z, # tensor, shape = (I, indT, L)
-  E_Z_inter, # tensor, shape = (I, indT-1, L,L)
-  xi # tensor, shape = (J, L)
-) {
-  J <- length(M_beta)
+compute_elbo <- function(y, delta_mat, m_beta, v_beta, m_beta_prior,
+                         v_beta_prior, alpha, alpha_prior, omega,
+                         omega_prior, e_z, e_zz, xi) {
+  j <- length(m_beta)
 
-  indT <- Y$shape[2]
+  t <- y$shape[2]
 
   # Use same device as input tensors
-  device <- Y$device
-  elbo <- torch_zeros(1, dtype = torch_float(), device = device)
+  device <- y$device
+  elbo <- torch_zeros(1, dtype = torch_float(), device = device) # nolint
 
-  log_phi <- e_log_phi(Y,
-    M_beta = M_beta,
-    V_beta = V_beta,
+  log_phi <- e_log_phi(
+    y = y,
+    m_beta = m_beta,
+    v_beta = v_beta,
     xi = xi,
-    Delta_matrices = Delta_matrices
+    delta_mat = delta_mat
   )
 
-  elbo <- elbo + (log_phi * E_Z)$sum()
+  elbo <- elbo + (log_phi * e_z)$sum()
 
-  for (j in seq(J)) {
-    elbo <- elbo - 1 / 2 * (V_beta[[j]] + (M_beta[[j]] - M_beta_prior[[j]])$outer((M_beta[[j]] - M_beta_prior[[j]]))) |>
-      torch_matmul(V_beta_prior[[j]]$inverse()) |>
-      torch_trace()
+  for (j_iter in seq(j)) {
+    tmp <- m_beta[[j_iter]] - m_beta_prior[[j_iter]]
 
-    elbo <- elbo + 1 / 2 * torch_logdet(V_beta[[j]])
+    elbo <- elbo - 1 / 2 * (v_beta[[j_iter]] + tmp$outer(tmp)) |>
+      torch_matmul(v_beta_prior[[j_iter]]$inverse()) |> # nolint
+      torch_trace() # nolint
+
+    elbo <- elbo + 1 / 2 * torch_logdet(v_beta[[j_iter]]) # nolint
   }
 
-  elbo <- elbo + ((torch_digamma(alpha) - torch_digamma(alpha$sum())) * (alpha_prior - alpha + E_Z[, 1, ]$sum(1)))$sum()
+  elbo <- elbo + (
+    (torch_digamma(alpha) - torch_digamma(alpha$sum())) * # nolint
+      (alpha_prior - alpha + e_z[, 1, ]$sum(1))
+  )$sum()
 
-  elbo <- elbo + ((torch_digamma(omega) - torch_digamma(omega$sum(2))$unsqueeze(2)) * (omega_prior - omega + E_Z_inter$sum(c(1, 2))))$sum()
+  elbo <- elbo + (
+    (torch_digamma(omega) - torch_digamma(omega$sum(2))$unsqueeze(2)) * # nolint
+      (omega_prior - omega + e_zz$sum(c(1, 2)))
+  )$sum()
 
-  elbo <- elbo + torch_lgamma(alpha)$sum() - torch_lgamma(alpha$sum())
 
-  elbo <- elbo + torch_lgamma(omega)$sum() - torch_lgamma(omega$sum(2))$sum()
+  elbo <- elbo + torch_lgamma(alpha)$sum() - torch_lgamma(alpha$sum()) # nolint
 
-  elbo <- elbo - (E_Z[, 1, ] * E_Z[, 1, ]$log())$sum()
+  elbo <- elbo + torch_lgamma(omega)$sum() - torch_lgamma(omega$sum(2))$sum() # nolint
 
-  elbo <- elbo - (E_Z_inter * (E_Z_inter$log() - E_Z[, 1:(indT - 1), ]$unsqueeze(4)$log()))$sum()
+  elbo <- elbo - (e_z[, 1, ] * e_z[, 1, ]$log())$sum()
+
+  elbo <- elbo - (
+    e_zz * (
+      e_zz$log() - e_z[, 1:(t - 1), ]$unsqueeze(4)$log()
+    )
+  )$sum()
 
   elbo$item()
 }
