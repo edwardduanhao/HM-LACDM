@@ -75,12 +75,12 @@ jj_func <- function(xi, epsilon = 1e-10) {
 #' }
 #'
 #' @export
-update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi) {
+update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi) {
   # Extract dimensions from response tensor
   c(i, t, j) %<-% y$shape # nolint
 
   # Sum over individuals and time points to get class weights
-  weights_z <- z$sum(c(1, 2))
+  weights_z <- e_z$sum(c(1, 2))
 
   # Initialize storage for posterior parameters
   m_beta <- vector("list", j)

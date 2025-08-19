@@ -46,7 +46,7 @@
 data_generate <- function(
     i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, device = "auto") {
   # Setup device
-  device <- get_device(device)
+  device <- get_device(device) # nolint
 
   # Set random seed for reproducibility
   if (!is.null(seed)) {
@@ -66,7 +66,7 @@ data_generate <- function(
       as_array() |> # nolint
       sapply(
         \(int_class) {
-          int_to_bin(
+          int_to_bin( # nolint
             x = int_class,
             d = k
           )
@@ -77,7 +77,7 @@ data_generate <- function(
 
   # Generate the delta matrix for each item
   delta_mat <- lapply(seq(j), \(j_iter) {
-    build_delta(
+    build_delta( # nolint
       q = q_mat[j_iter, ],
       interact = FALSE
     ) |>
@@ -87,7 +87,7 @@ data_generate <- function(
   # Generate the beta vector for each item
   beta <- rowSums(q_mat) |>
     lapply(\(k_iter) {
-      build_beta(
+      build_beta( # nolint
         k = k_iter
       ) |>
         torch_tensor(device = device) # nolint
@@ -109,9 +109,9 @@ data_generate <- function(
   tau <- torch_ones(l, l, dtype = torch_float(), device = device) # nolint
 
   for (l_prev in seq(l)) {
-    profile_prev <- int_to_bin(l_prev - 1, d = k)
+    profile_prev <- int_to_bin(l_prev - 1, d = k) # nolint
     for (l_after in seq(l)) {
-      profile_after <- int_to_bin(l_after - 1, d = k)
+      profile_after <- int_to_bin(l_after - 1, d = k) # nolint
       for (k_iter in seq(k)) {
         tau[l_prev, l_after] <- tau[l_prev, l_after] *
           kernel_mat[profile_prev[k_iter] + 1, profile_after[k_iter] + 1]
@@ -149,7 +149,7 @@ data_generate <- function(
   for (t_iter in 1:t) {
     for (j_iter in 1:j) {
       delta_mat_t <- delta_mat[[j_iter]][as.numeric(int_class[, t_iter]), ]
-      y_sampler <- (delta_mat_t %@% beta[[j_iter]]) |>
+      y_sampler <- (delta_mat_t %@% beta[[j_iter]]) |> # nolint
         torch_sigmoid() |> # nolint
         distr_bernoulli() # nolint
       y_mat[, , t_iter, j_iter] <- y_sampler$sample(n_dataset)
@@ -166,7 +166,7 @@ data_generate <- function(
 
   for (t_iter in seq(t)) {
     for (i_iter in seq(i)) {
-      profiles_mat[i_iter, t_iter, ] <- int_to_bin(
+      profiles_mat[i_iter, t_iter, ] <- int_to_bin( # nolint
         x = int_class[i_iter, t_iter] - 1,
         d = k
       )
