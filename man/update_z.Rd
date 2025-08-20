@@ -41,7 +41,7 @@ The algorithm uses log-space computations to maintain numerical stability.
 \examples{
 \dontrun{
 # Assuming appropriate torch tensors are available
-result <- update_Z(log_phi, log_kappa, log_eta)
+result <- update_z(log_phi, log_kappa, log_eta)
 e_z <- result[[1]]
 e_z_inter <- result[[2]]
 }

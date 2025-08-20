@@ -4,9 +4,13 @@
 \alias{e_log_phi}
 \title{Compute Expected Log Item Response Probabilities}
 \usage{
-e_log_phi(Y, M_beta, V_beta, xi, Delta_matrices)
+e_log_phi(y, m_beta, v_beta, xi, delta_mat)
 }
 \arguments{
+\item{xi}{A torch tensor of shape (j, l) containing auxiliary variational
+parameters for the Jaakkola-Jordan bound, where l = 2^k is the number
+of latent classes}
+
 \item{Y}{A torch tensor of shape (i, t, j) containing binary response data,
 where i is the number of individuals, t is the number of time points,
 and j is the number of items}
@@ -16,10 +20,6 @@ item-effect parameters (beta)}
 
 \item{V_beta}{A list of length j containing posterior covariance matrices
 for item-effect parameters (beta)}
-
-\item{xi}{A torch tensor of shape (j, l) containing auxiliary variational
-parameters for the Jaakkola-Jordan bound, where l = 2^k is the number
-of latent classes}
 
 \item{Delta_matrices}{A list of length j containing design matrices for
 each item, where each element is a torch tensor of shape (l, k+1)}

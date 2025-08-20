@@ -20,14 +20,14 @@ Computes the expectation of the logarithm of the initial distribution
 parameters (pi) under a Dirichlet posterior distribution.
 }
 \details{
-This function computes E\link{log(pi_l)} = ψ(α_l) - ψ(Σα_l)
-where ψ is the digamma function. This expectation is used in the
-variational lower bound computation.
+This function computes the expectation of log(pi_l) under a
+Dirichlet posterior distribution. This expectation is used in
+the variational lower bound computation.
 }
 \examples{
 \dontrun{
 alpha <- torch_tensor(c(2.5, 3.1, 4.2))
-e_log_pi <- E_log_pi(alpha)
+e_log_pi <- e_log_pi(alpha)
 }
 
 }

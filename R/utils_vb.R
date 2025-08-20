@@ -69,7 +69,7 @@ jj_func <- function(xi, epsilon = 1e-10) {
 #' @examples
 #' \dontrun{
 #' # Assuming appropriate torch tensors and parameters are available
-#' result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi)
+#' result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
 #' updated_means <- result$m_beta
 #' updated_covariances <- result$v_beta
 #' }
@@ -105,7 +105,7 @@ update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi) {
     m_beta[[j_iter]] <- v_beta[[j_iter]] %@% ( # nolint
       v_beta_prior[[j_iter]]$inverse() %@% m_beta_prior[[j_iter]] +
         delta_mat_j$t() %@% torch_einsum( # nolint
-          "ntl,nt->l", list(z, y[, , j_iter] - 1 / 2)
+          "ntl,nt->l", list(e_z, y[, , j_iter] - 1 / 2)
         )
     )
   }
@@ -491,10 +491,11 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
                            alpha_level = 0.05, q_mat_true = NULL) {
   j <- length(m_beta)
 
-  k <- ncol(beta_hat) - 1
-
   beta_hat <- sapply(m_beta, \(x) as_array(x)) |> t() # nolint
 
+  k <- ncol(beta_hat) - 1
+
+  # Compute standard deviations
   beta_hat_sd <- sapply(v_beta, \(x) sqrt(as_array(torch_diag(x)))) |> t() # nolint
 
   beta_hat_trace <- torch_stack(beta_hat_trace) |> # nolint
@@ -616,14 +617,14 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
 
     q_mat_hat <- q_mat_hat_best
 
-    list(
+    return(list(
       "Q_hat" = q_mat_hat,
       "acc" = acc,
       "beta_hat" = beta_hat_permuted,
       "beta_hat_sd" = beta_hat_sd_permuted,
       "beta_hat_trace" = beta_hat_trace_permuted,
       "ord" = idx_best
-    )
+    ))
   }
   q_mat_hat
 }

@@ -4,7 +4,7 @@
 \alias{update_beta}
 \title{Update Beta Parameters for Variational Inference}
 \usage{
-update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi)
+update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
 }
 \arguments{
 \item{y}{A torch tensor of shape (i, t, j) containing binary response data,
@@ -21,11 +21,11 @@ for beta parameters}
 
 \item{delta_mat}{A list of length j containing design matrices for each item}
 
-\item{z}{A torch tensor of shape (i, t, l) containing expected latent class
-memberships, where l = 2^k is the number of latent classes}
-
 \item{xi}{A torch tensor of shape (j, l) containing auxiliary variational
 parameters for the Jaakkola-Jordan bound}
+
+\item{z}{A torch tensor of shape (i, t, l) containing expected latent class
+memberships, where l = 2^k is the number of latent classes}
 }
 \value{
 A list containing:
@@ -47,7 +47,7 @@ Jaakkola-Jordan lower bound to handle the nonconjugate logistic likelihood.
 \examples{
 \dontrun{
 # Assuming appropriate torch tensors and parameters are available
-result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, z, xi)
+result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
 updated_means <- result$m_beta
 updated_covariances <- result$v_beta
 }

@@ -245,7 +245,7 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
     m_beta_true <- array(0, dim = c(j, k + 1)) # nolint
 
     for (j_iter in seq(j)) {
-      m_beta_true[j_iter, c(TRUE, data$ground_truth$Q_matrix[j_iter, ] == 1)] <-
+      m_beta_true[j_iter, c(TRUE, data$ground_truth$q_mat[j_iter, ] == 1)] <-
         data$ground_truth$beta[[j_iter]]
     }
 
@@ -256,7 +256,7 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 
     # attribute accuracy
 
-    profiles_index <- matrix(ord_map[as_array(e_z$argmax(dim = 3))], nrow = I) # nolint
+    profiles_index <- matrix(ord_map[as_array(e_z$argmax(dim = 3))], nrow = i) # nolint
 
     profile_acc <- colMeans(profiles_index == data$ground_truth$profiles_index) # nolint
 

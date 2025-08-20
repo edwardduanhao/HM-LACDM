@@ -5,39 +5,39 @@
 \title{Compute Evidence Lower Bound (ELBO)}
 \usage{
 compute_elbo(
-  Y,
-  Delta_matrices,
-  M_beta,
-  V_beta,
-  M_beta_prior,
-  V_beta_prior,
+  y,
+  delta_mat,
+  m_beta,
+  v_beta,
+  m_beta_prior,
+  v_beta_prior,
   alpha,
   alpha_prior,
   omega,
   omega_prior,
-  E_Z,
-  E_Z_inter,
+  e_z,
+  e_zz,
   xi
 )
 }
 \arguments{
-\item{Y}{A torch tensor of shape (i, t, j) containing binary response data,
-where i is the number of individuals, t is the number of time points,
+\item{y}{A torch tensor of shape (i, t, j) containing binary response,
+data where i is the number of individuals, t is the number of time points,
 and j is the number of items}
 
-\item{Delta_matrices}{A list of length j containing design matrices for
+\item{delta_mat}{A list of length j containing design matrices for
 each item, where each element is a torch tensor of shape (l, k+1)}
 
-\item{M_beta}{A list of length j containing posterior mean vectors for
+\item{m_beta}{A list of length j containing posterior mean vectors for
 item-effect parameters (beta)}
 
-\item{V_beta}{A list of length j containing posterior covariance matrices
+\item{v_beta}{A list of length j containing posterior covariance matrices
 for item-effect parameters (beta)}
 
-\item{M_beta_prior}{A list of length j containing prior mean vectors for
+\item{m_beta_prior}{A list of length j containing prior mean vectors for
 item-effect parameters (beta)}
 
-\item{V_beta_prior}{A list of length j containing prior covariance matrices
+\item{v_beta_prior}{A list of length j containing prior covariance matrices
 for item-effect parameters (beta)}
 
 \item{alpha}{A torch tensor of shape (l,) containing posterior Dirichlet
@@ -52,10 +52,10 @@ parameters for the transition matrix}
 \item{omega_prior}{A torch tensor of shape (l, l) containing prior Dirichlet
 parameters for the transition matrix}
 
-\item{E_Z}{A torch tensor of shape (i, t, l) containing expected latent
+\item{e_z}{A torch tensor of shape (i, t, l) containing expected latent
 class memberships}
 
-\item{E_Z_inter}{A torch tensor of shape (i, t-1, l, l) containing expected
+\item{e_zz}{A torch tensor of shape (i, t-1, l, l) containing expected
 transition counts between consecutive time points}
 
 \item{xi}{A torch tensor of shape (j, l) containing auxiliary variational
@@ -79,9 +79,11 @@ and all model parameters. Higher ELBO values indicate better model fit.
 \examples{
 \dontrun{
 # Assuming all required tensors and parameters are available
-elbo_value <- compute_elbo(Y, Delta_matrices, M_beta, V_beta,
-                          M_beta_prior, V_beta_prior, alpha, alpha_prior,
-                          omega, omega_prior, E_Z, E_Z_inter, xi)
+elbo_value <- compute_elbo(
+  y, delta_mat, m_beta, v_beta,
+  m_beta_prior, v_beta_prior, alpha, alpha_prior,
+  omega, omega_prior, e_z, e_zz, xi
+)
 }
 
 }

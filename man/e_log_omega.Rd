@@ -27,7 +27,7 @@ variational lower bound computation for the transition probabilities.
 \examples{
 \dontrun{
 omega <- torch_tensor(matrix(c(3.2, 1.8, 2.1, 4.5), nrow = 2))
-e_log_omega <- E_log_omega(omega)
+e_log_omega <- e_log_omega(omega)
 }
 
 }
