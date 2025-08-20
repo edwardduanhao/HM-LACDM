@@ -269,7 +269,7 @@ update_alpha <- function(alpha_prior, e_z) {
 #' # Assuming appropriate torch tensors are available
 #' result <- update_z(log_phi, log_kappa, log_eta)
 #' e_z <- result[[1]]
-#' e_z_inter <- result[[2]]
+#' e_zz<- result[[2]]
 #' }
 #'
 #' @importFrom torch torch_zeros
