@@ -6,7 +6,7 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
   device <- get_device(device) # nolint
 
   # Print the number of threads Torch is using
-  if (device == "CPU") {
+  if (device == "cpu") {
     print(paste("Torch is using", torch_get_num_threads(), "threads")) # nolint
   }
 
