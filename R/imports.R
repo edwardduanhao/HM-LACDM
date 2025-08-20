@@ -5,4 +5,5 @@
 #' @import zeallot
 #' @import iterpc
 #' @import cli
+#' @import ggplot2
 NULL

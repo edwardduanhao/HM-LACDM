@@ -1,5 +1,3 @@
-library(ggplot2)
-
 # load the Q-matrix
 
 q_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
