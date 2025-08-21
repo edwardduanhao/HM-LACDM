@@ -51,7 +51,10 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
   m_beta <- lapply( # nolint
     beta_dim,
     \(d) {
-      torch_tensor(c(-3, rep(1, k)), device = device) # nolint
+      # Add small random perturbation to avoid identical initializations
+      base_init <- c(-3, rep(2, k))
+      noise <- torch_randn(d, device = device) * 0.1 # Small random noise # nolint
+      torch_tensor(base_init, device = device) + noise # nolint
     }
   )
 
@@ -74,7 +77,7 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 
   omega_prior <- torch_ones(l, l, dtype = torch_float(), device = device) # nolint
 
-  omega <- torch_ones(l, l, dtype = torch_float(), device = device) # nolint
+  omega <- torch_ones(l, l, dtype = torch_float(), device = device) + torch_randn(l, l, device = device) * 0.1 # nolint
 
   omega_trace <- torch_zeros(max_iter, l, l, device = device) # nolint
 
@@ -82,15 +85,23 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 
   alpha_prior <- torch_ones(l, dtype = torch_float(), device = device) # nolint
 
-  alpha <- torch_ones(l, dtype = torch_float(), device = device) # nolint
+  alpha <- torch_ones(l, dtype = torch_float(), device = device) + torch_randn(l, device = device) * 0.1 # nolint
 
   alpha_trace <- torch_zeros(max_iter, l, device = device) # nolint
 
   # Initialize z
 
-  e_z <- torch_ones(i, t, l, device = device) / (l * t) # nolint
+  # Initialize with random perturbation around uniform distribution
+  e_z <- torch_ones(i, t, l, device = device) / l + torch_rand(i, t, l, device = device) * 0.01 # nolint
+  # Ensure probabilities are positive and sum to 1 across latent classes
+  e_z <- torch_abs(e_z) # nolint
+  e_z <- e_z / e_z$sum(dim = 3, keepdim = TRUE) # nolint
 
-  e_zz <- torch_ones(i, t - 1, l, l, device = device) / (l * l) # nolint
+  # Initialize transition expectations with random perturbation
+  e_zz <- torch_ones(i, t - 1, l, l, device = device) / (l * l) + torch_rand(i, t - 1, l, l, device = device) * 0.001 # nolint
+  # Ensure probabilities are positive and sum to 1 across destination classes
+  e_zz <- torch_abs(e_zz) # nolint
+  e_zz <- e_zz / e_zz$sum(dim = 4, keepdim = TRUE) # nolint
 
   e_z_trace <- torch_zeros(max_iter, i, t - 1, l, device = device) # nolint
 
@@ -251,7 +262,9 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 
     # Compute the re-ordering mapping
     ord_map <- sapply(seq(l), \(l_iter) {
-      sum(int_to_bin(l_iter - 1, k) * 2^(post_hoc$ord - 1)) + 1 # nolint
+      binary_old <- int_to_bin(l_iter - 1, k)
+      binary_new <- binary_old[post_hoc$ord]
+      sum(binary_new * 2^(0:(k - 1))) + 1
     })
 
     # attribute accuracy

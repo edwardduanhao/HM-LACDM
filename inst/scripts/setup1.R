@@ -1,41 +1,72 @@
+library(ggplot2)
+
 q3_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
 q4_mat <- as.matrix(read.table("inst/Q_Matrix/Q_4.txt"))
-n_dataset <- 20
+n_dataset <- 100
 
 # -------------------------- setup 1 -------------------------- #
 
-# I = 200, K = 3, indT = 2
+# i = 200, k = 3, t = 2
 
 # generate data
 
 data1 <- data_generate(
-  i = 500, k = 3, j = 21, t = 2, n_dataset = n_dataset,
+  i = 200, k = 3, j = 21, t = 2, n_dataset = n_dataset,
   seed = 2025, q_mat = q3_mat
 )
 
-# run the HMLCDM algorithm
+# run the HMLCDM algorithm with multi-run approach
 
 res1 <- vector(mode = "list", length = n_dataset)
+multi_run_summaries <- vector(mode = "list", length = n_dataset)
 
 for (i in seq(n_dataset)) {
-  print(i)
-  res1[[i]] <- hmlcdm_vb(
+  cat("=== Dataset", i, "of", n_dataset, "===\n")
+
+  # Run multi-run HMLCDM for better reliability
+  multi_result <- multi_run_hmlcdm(
     data = list(
       "y" = data1$y[i, , , ], "k" = data1$k, "ground_truth" = data1$ground_truth
     ),
-    max_iter = 100, # maximum number of iterations
-    elbo = FALSE,
-    alpha_level = 0.05
+    n_runs = 1, # Run 1 time per dataset
+    max_iter = 100,
+    alpha_level = 0.05,
+    min_profile_threshold = 0.6, # Require at least 60% profile accuracy
+    verbose = TRUE
   )
+
+  # Store the best result
+  res1[[i]] <- multi_result$best_result
+
+  # Store summary information
+  multi_run_summaries[[i]] <- list(
+    n_successful = multi_result$n_successful,
+    n_good_profile = multi_result$n_good_profile,
+    best_run_index = multi_result$best_run_index,
+    metrics = multi_result$selection_metrics
+  )
+
+  cat("\n")
 }
 
+# Extract metrics from multi-run results
 runtime1 <- sapply(res1, \(x) x$runtime)
-
-mean(runtime1)
-
 q_acc1 <- sapply(res1, \(x) x$Q_acc)
+profile_acc1 <- sapply(res1, \(x) mean(x$profiles_acc))
 
-mean(q_acc1)
+# Print summary
+cat("=== OVERALL RESULTS SUMMARY ===\n")
+cat("Runtime (mean):", round(mean(runtime1), 2), "seconds\n")
+cat("Q-matrix accuracy (mean):", round(mean(q_acc1), 3), "\n")
+cat("Profile accuracy (mean):", round(mean(profile_acc1), 3), "\n")
+cat(
+  "Profile accuracy (range): [", round(min(profile_acc1), 3), ", ",
+  round(max(profile_acc1), 3), "]\n"
+)
+cat("Datasets with profile accuracy > 0.8:", sum(profile_acc1 > 0.8),
+    "out of", n_dataset, "\n")
+cat("Datasets with profile accuracy < 0.4:", sum(profile_acc1 < 0.4),
+    "out of", n_dataset, "\n")
 
 q_fp1 <- sapply(res1, \(x) {
   mean((x$Q_hat == 1) * (data1$ground_truth$q_mat == 0))

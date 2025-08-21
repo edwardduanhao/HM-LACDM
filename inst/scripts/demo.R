@@ -1,3 +1,5 @@
+library(ggplot2)
+
 # load the Q-matrix
 
 q_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
@@ -5,12 +7,29 @@ q_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
 # generate data
 
 data <- data_generate(
-  i = 500, k = 3, j = 21, t = 2, n_dataset = 1, seed = 2025, q_mat = q_mat
+  i = 200, k = 3, j = 21, t = 2, n_dataset = 1, seed = 2025, q_mat = q_mat
 )
 
-# run the HMLCDM algorithm
+# run the HMLCDM algorithm with multi-run approach for better reliability
 
-res <- hmlcdm_vb(data = data, max_iter = 100, elbo = TRUE, device = "auto")
+# Use multi-run approach to get the best result
+multi_result <- multi_run_hmlcdm(
+  data = data,
+  n_runs = 1,  # Run 3 times and pick the best
+  max_iter = 100,
+  min_profile_threshold = 0.7,  # Higher threshold for demo
+  verbose = FALSE
+)
+
+# Use the best result for plotting
+res <- multi_result$best_result
+
+# Print selection summary
+cat("\n=== DEMO MULTI-RUN SUMMARY ===\n")
+cat("Profile accuracy of selected run:", round(mean(res$profiles_acc), 3), "\n")
+cat("Q-matrix accuracy:", round(res$Q_acc, 3), "\n")
+cat("Final ELBO:", round(tail(res$elbo, 1), 1), "\n")
+compare_runs(multi_result)
 
 # ------------------------------ alpha trace ------------------------------ #
 

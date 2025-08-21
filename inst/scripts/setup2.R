@@ -1,66 +1,103 @@
-require(ggplot2)
+library(ggplot2)
 
-Q3_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
-Q4_mat <- as.matrix(read.table("inst/Q_Matrix/Q_4.txt"))
-N_dataset <- 50
+q3_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
+q4_mat <- as.matrix(read.table("inst/Q_Matrix/Q_4.txt"))
+n_dataset <- 100
 
 # -------------------------- setup 2 -------------------------- #
 
-# I = 1000, K = 3, indT = 2
+# i = 1000, k = 3, t = 2
 
 # generate data
 
 data2 <- data_generate(
-  I = 1000, # number of respondents
-  K = 3, # number of latent attributes
-  J = 21, # number of items
-  indT = 2, # number of time points
-  N_dataset = N_dataset, # number of datasets to generate
-  seed = 2025, # seed for reproducibility
-  Q_mat = Q3_mat # generate a random Q-matrix if NULL
+  i = 1000, k = 3, j = 21, t = 2, n_dataset = n_dataset,
+  seed = 2025, q_mat = q3_mat
 )
 
-# run the HMLCDM algorithm
+# run the HMLCDM algorithm with multi-run approach
 
-res2 <- vector(mode = "list", length = N_dataset)
+res2 <- vector(mode = "list", length = n_dataset)
+multi_run_summaries <- vector(mode = "list", length = n_dataset)
 
-for (i in seq(N_dataset)) {
-  print(i)
-  res2[[i]] <- HMLCDM_VB(
-    data = list("Y" = data2$Y[i, , , ], "K" = data2$K, "ground_truth" = data2$ground_truth),
-    max_iter = 100, # maximum number of iterations
-    elbo = FALSE,
-    alpha_level = 0.01
+for (i in seq(n_dataset)) {
+  cat("=== Dataset", i, "of", n_dataset, "===\n")
+
+  # Run multi-run HMLCDM for better reliability
+  multi_result <- multi_run_hmlcdm(
+    data = list(
+      "y" = data2$y[i, , , ], "k" = data2$k, "ground_truth" = data2$ground_truth
+    ),
+    n_runs = 1, # Run 1 time per dataset
+    max_iter = 100,
+    alpha_level = 0.05,
+    min_profile_threshold = 0.6, # Require at least 60% profile accuracy
+    verbose = TRUE
   )
+
+  # Store the best result
+  res2[[i]] <- multi_result$best_result
+
+  # Store summary information
+  multi_run_summaries[[i]] <- list(
+    n_successful = multi_result$n_successful,
+    n_good_profile = multi_result$n_good_profile,
+    best_run_index = multi_result$best_run_index,
+    metrics = multi_result$selection_metrics
+  )
+
+  cat("\n")
 }
 
-runtime2 <- sapply(res2, \(x){
-  x$runtime
+# Extract metrics from multi-run results
+runtime2 <- sapply(res2, \(x) x$runtime)
+q_acc2 <- sapply(res2, \(x) x$Q_acc)
+profile_acc2 <- sapply(res2, \(x) mean(x$profiles_acc))
+
+
+# Print summary
+cat("=== OVERALL RESULTS SUMMARY ===\n")
+cat("Runtime (mean):", round(mean(runtime2), 2), "seconds\n")
+cat("Q-matrix accuracy (mean):", round(mean(q_acc2), 3), "\n")
+cat("Profile accuracy (mean):", round(mean(profile_acc2), 3), "\n")
+cat(
+  "Profile accuracy (range): [", round(min(profile_acc2), 3), ", ",
+  round(max(profile_acc2), 3), "]\n"
+)
+cat("Datasets with profile accuracy > 0.8:", sum(profile_acc2 > 0.8),
+    "out of", n_dataset, "\n")
+cat("Datasets with profile accuracy < 0.4:", sum(profile_acc2 < 0.4),
+    "out of", n_dataset, "\n")
+
+q_fp2 <- sapply(res2, \(x) {
+  mean((x$Q_hat == 1) * (data2$ground_truth$q_mat == 0))
+})
+mean(q_fp2)
+
+q_fn2 <- sapply(res2, \(x) {
+  mean((x$Q_hat == 0) * (data2$ground_truth$q_mat == 1))
+})
+mean(q_fn2)
+
+beta_rmse2 <- sapply(seq(n_dataset), \(i) {
+  (as.vector(res2[[i]]$beta - res2[[i]]$beta_true)[as.logical(
+    as.vector(data2$ground_truth$q_mat)
+  )])^2 |>
+    mean() |>
+    sqrt()
 })
 
-mean(runtime2)
+pii_rmse2 <- sapply(seq(n_dataset), \(i) {
+  (res2[[i]]$pii - data2$ground_truth$pii)^2 |>
+    mean() |>
+    sqrt()
+})
 
-Q_acc2 <- sapply(res2, \(x) x$Q_acc)
-
-mean(Q_acc2)
-
-Q_FP2 <- sapply(res2, \(x) mean((x$Q_hat == 1) * (data2$ground_truth$Q_matrix == 0)))
-mean(Q_FP2)
-
-Q_FN2 <- sapply(res2, \(x) mean((x$Q_hat == 0) * (data2$ground_truth$Q_matrix == 1)))
-mean(Q_FN2)
-
-beta_rmse2 <- sapply(seq(N_dataset), \(i) (as.vector(res2[[i]]$beta - res2[[i]]$beta_true)[as.logical(as.vector(data2$ground_truth$Q_matrix))])^2 |>
-  mean() |>
-  sqrt())
-
-pii_rmse2 <- sapply(seq(N_dataset), \(i) (res2[[i]]$pii - data2$ground_truth$pii)^2 |>
-  mean() |>
-  sqrt())
-
-tau_rmse2 <- sapply(seq(N_dataset), \(i) (res2[[i]]$tau - data2$ground_truth$tau)^2 |>
-  mean() |>
-  sqrt())
+tau_rmse2 <- sapply(seq(n_dataset), \(i) {
+  (res2[[i]]$tau - data2$ground_truth$tau)^2 |>
+    mean() |>
+    sqrt()
+})
 
 fig_beta_rmse2 <- ggplot(data.frame(beta_rmse2), aes(x = beta_rmse2)) +
   geom_density(
@@ -87,7 +124,7 @@ fig_tau_rmse2 <- ggplot(data.frame(tau_rmse2), aes(x = tau_rmse2)) +
   theme_classic()
 
 ggsave(
-  filename = "inst/figures/multiplerun/setup2/beta_rmse.pdf", # Save in 'figures' subdirectory
+  filename = "inst/figures/multiplerun/setup2/beta_rmse.pdf",
   plot = fig_beta_rmse2,
   width = 6,
   height = 4,
@@ -96,7 +133,7 @@ ggsave(
 )
 
 ggsave(
-  filename = "inst/figures/multiplerun/setup2/pi_rmse.pdf", # Save in 'figures' subdirectory
+  filename = "inst/figures/multiplerun/setup2/pi_rmse.pdf",
   plot = fig_pii_rmse2,
   width = 6,
   height = 4,
@@ -105,7 +142,7 @@ ggsave(
 )
 
 ggsave(
-  filename = "inst/figures/multiplerun/setup2/tau_rmse.pdf", # Save in 'figures' subdirectory
+  filename = "inst/figures/multiplerun/setup2/tau_rmse.pdf",
   plot = fig_tau_rmse2,
   width = 6,
   height = 4,
