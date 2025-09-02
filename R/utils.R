@@ -82,8 +82,8 @@ get_device <- function(device = "auto") {
 #'   of x
 #'
 #' @examples
-#' int_to_bin(5, 4)  # Returns c(1, 0, 1, 0)
-#' int_to_bin(0, 3)  # Returns c(0, 0, 0)
+#' int_to_bin(5, 4) # Returns c(1, 0, 1, 0)
+#' int_to_bin(0, 3) # Returns c(0, 0, 0)
 #'
 #' @export
 int_to_bin <- function(x, d) {
@@ -114,7 +114,7 @@ int_to_bin <- function(x, d) {
 #'
 #' @examples
 #' \dontrun{
-#' q_vector <- c(1, 1, 0)  # Item requires attributes 1 and 2
+#' q_vector <- c(1, 1, 0) # Item requires attributes 1 and 2
 #' delta_matrix <- build_delta(q_vector)
 #' }
 #'
@@ -171,19 +171,390 @@ build_delta <- function(q, interact = FALSE) {
 #' @return A numeric vector of item parameters (beta values)
 #'
 #' @examples
-#' build_beta(2)  # Returns c(-3, 3, 3)
-#' build_beta(4)  # Returns c(-3, 1.5, 1.5, 1.5, 1.5)
+#' build_beta(2) # Returns c(-3, 3, 3)
+#' build_beta(4) # Returns c(-3, 1.5, 1.5, 1.5, 1.5)
 #'
 #' @export
-build_beta <- function(k) {
-  switch(as.character(k),
-    "1" = c(-3, 6),
-    "2" = c(-3, 3, 3),
-    "3" = c(-3, 2, 2, 2),
-    "4" = c(-3, 1.5, 1.5, 1.5, 1.5),
-    "5" = c(-3, 1, 1, 1, 1, 1),
-    stop("Invalid K")
-  )
+build_beta <- function(k, mode = "strong") {
+  if (mode == "strong") {
+    beta <- c(-3, rep(6 / k, k))
+  } else if (mode == "moderate") {
+    beta <- c(-2, rep(4 / k, k))
+  } else if (mode == "weak") {
+    beta <- c(-1.5, rep(3 / k, k))
+  } else {
+    stop("mode should be one of 'strong', 'moderate', or 'weak'")
+  }
+
+  beta
 }
 
 # ---------------------------------------------------------------------------- #
+
+#' Plot the trajectory of alpha parameters over iterations
+#'
+#' @param alpha_trace A matrix containing the alpha parameter traces
+#' @param iter_trunc The number of iterations to truncate the plot (default: 30)
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "alpha_trace.pdf")
+#'
+#' @return The ggplot object for the alpha trace plot
+#'
+#' @examples
+#' alpha_trace <- matrix(rnorm(300), ncol = 3)
+#' plot_alpha_trace(alpha_trace)
+#'
+#' @export
+plot_alpha_trace <- function(
+    alpha_trace,
+    iter_trunc = 30,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "alpha_trace.pdf") {
+  df_alpha <- as.data.frame(alpha_trace[seq(iter_trunc), ]) |> stack()
+
+  df_alpha$iter <- rep(seq(iter_trunc), times = ncol(alpha_trace))
+
+  names(df_alpha) <- c("value", "variable", "iter")
+
+  fig_alpha <- ggplot(df_alpha, aes(x = iter, y = value, group = variable)) +
+    geom_line(color = "#2774AE") +
+    theme_classic() +
+    theme(legend.position = "none") +
+    labs(x = "Iteration", y = expression(alpha))
+
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_alpha,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig_alpha
+}
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the trajectory of beta parameters over iterations
+#'
+#' @param beta_trace A matrix containing the beta parameter traces
+#' @param iter_trunc The number of iterations to truncate the plot (default: 30)
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "beta_trace.pdf")
+#'
+#' @return The ggplot object for the beta trace plot
+#'
+#' @examples
+#' beta_trace <- matrix(rnorm(300), ncol = 3)
+#' plot_beta_trace(beta_trace)
+#'
+#' @export
+plot_beta_trace <- function(
+    beta_trace,
+    beta_true,
+    iter_trunc = 30,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "beta_trace.pdf") {
+  df_beta <- matrix(beta_trace,
+    nrow = dim(beta_trace)[1],
+    ncol = prod(dim(beta_trace)[-1])
+  )[seq(iter_trunc), ] |>
+    as.data.frame() |>
+    stack()
+
+  df_beta$iter <- rep(seq(iter_trunc), times = ncol(beta_trace))
+
+  df_beta$type <- rep(as.factor(beta_true), each = iter_trunc)
+
+  df_beta$iter <- rep(seq(iter_trunc), times = ncol(beta_trace))
+
+  names(df_beta) <- c("value", "variable", "iter", "type")
+
+  fig_beta <- ggplot(
+    df_beta,
+    aes(x = iter, y = value, group = variable, color = type)
+  ) +
+    geom_line() +
+    theme_classic() +
+    theme(legend.position = "none") +
+    labs(x = "Iteration", y = expression(beta)) +
+    scale_color_brewer(palette = "Set1")
+
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_beta,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+    fig_beta
+  }
+}
+
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the trajectory of omega parameters over iterations
+#'
+#' @param omega_trace A matrix containing the omega parameter traces
+#' @param iter_trunc The number of iterations to truncate the plot (default: 30)
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "omega_trace.pdf")
+#'
+#' @return The ggplot object for the omega trace plot
+#'
+#' @examples
+#' omega_trace <- matrix(rnorm(300), ncol = 3)
+#' plot_omega_trace(omega_trace)
+#'
+#' @export
+plot_omega_trace <- function(
+    omega_trace,
+    iter_trunc = 30,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "omega_trace.pdf") {
+  df_omega <- matrix(omega_trace,
+    nrow = dim(omega_trace)[1],
+    ncol = prod(dim(omega_trace)[-1])
+  )[seq(iter_trunc), ] |>
+    as.data.frame() |>
+    stack()
+
+  df_omega$iter <- rep(seq(iter_trunc), times = ncol(omega_trace))
+
+  names(df_omega) <- c("value", "variable", "iter")
+
+  fig_omega <- ggplot(df_omega, aes(x = iter, y = value, group = variable)) +
+    geom_line(color = "#2774AE") +
+    theme_classic() +
+    theme(legend.position = "none") +
+    labs(x = "Iteration", y = expression(omega))
+
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_omega,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig_omega
+}
+
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the trajectory of elbo over iterations
+#'
+#' @param elbo_trace A vector containing the elbo values
+#' @param iter_trunc The number of iterations to truncate the plot (default: 30)
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "elbo_trace.pdf")
+#'
+#' @return The ggplot object for the elbo trace plot
+#'
+#' @examples
+#' elbo_trace <- rnorm(100)
+#' plot_elbo_trace(elbo_trace)
+#'
+#' @export
+plot_elbo_trace <- function(
+    elbo_trace,
+    iter_trunc = 30,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "elbo_trace.pdf") {
+  df_elbo <- data.frame(
+    iteration = seq(iter_trunc),
+    elbo = elbo_trace[seq(iter_trunc)]
+  )
+
+  fig_elbo <- ggplot(df_elbo, aes(x = iteration, y = elbo)) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 2) +
+    labs(x = "Iteration", y = "Evidence Lower Bound") +
+    theme_classic()
+
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_elbo,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig_elbo
+}
+
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the recovery plot of tau
+#'
+#' @param tau_hat A vector containing the estimated tau values
+#' @param tau_true A vector containing the true tau values
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "tau_recovery.pdf")
+#'
+#' @return The ggplot object for the tau recovery plot
+#'
+#' @examples
+#' tau_hat <- rnorm(100)
+#' tau_true <- rnorm(100)
+#' plot_tau_recovery(tau_hat, tau_true)
+#'
+#' @export
+plot_tau_recovery <- function(
+    tau_hat,
+    tau_true,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "tau_recovery.pdf") {
+  df_tau_recovery <- data.frame(
+    tau_true = as.vector(tau_true),
+    tau_hat = as.vector(tau_hat)
+  )
+
+  fig_tau_recovery <- ggplot(df_tau_recovery, aes(x = tau_true, y = tau_hat)) +
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+    theme_minimal() +
+    labs(
+      x = expression(paste("True ", tau)),
+      y = expression(paste("Estimated ", tau))
+    )
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_tau_recovery,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig_tau_recovery
+}
+
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the recovery plot of pi
+#'
+#' @param pii_hat A vector containing the estimated pi values
+#' @param pii_true A vector containing the true pi values
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "pii_recovery.pdf")
+#'
+#' @return The ggplot object for the pi recovery plot
+#'
+#' @examples
+#' pii_hat <- rnorm(100)
+#' pii_true <- rnorm(100)
+#' plot_pii_recovery(pii_hat, pii_true)
+#'
+#' @export
+plot_pii_recovery <- function(
+    pii_hat,
+    pii_true,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "pii_recovery.pdf") {
+  df_pii_recovery <- data.frame(
+    pii_true = as.vector(pii_true),
+    pii_hat = as.vector(pii_hat)
+  )
+
+  fig_pii_recovery <- ggplot(df_pii_recovery, aes(x = pii_true, y = pii_hat)) +
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+    theme_minimal() +
+    labs(
+      x = expression(paste("True ", pi)),
+      y = expression(paste("Estimated ", pi))
+    )
+
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_pii_recovery,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig_pii_recovery
+}
+
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the recovery plot of beta
+#'
+#' @param pii_hat A vector containing the estimated pi values
+#' @param pii_true A vector containing the true pi values
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/singlerun/")
+#' @param file_name The name of the file to save the plot (default: "pii_recovery.pdf")
+#'
+#' @return The ggplot object for the pi recovery plot
+#'
+#' @examples
+#' pii_hat <- rnorm(100)
+#' pii_true <- rnorm(100)
+#' plot_pii_recovery(pii_hat, pii_true)
+#'
+#' @export
+plot_beta_recovery <- function(
+    beta_hat,
+    beta_true,
+    save = TRUE,
+    path = "inst/figures/singlerun/",
+    file_name = "beta_recovery.pdf") {
+  df_beta_recovery <- data.frame(
+    beta_true = as.vector(beta_true),
+    beta_hat = as.vector(beta_hat)
+  )
+
+  fig_beta_recovery <- ggplot(
+    df_beta_recovery,
+    aes(x = beta_true, y = beta_hat)
+  ) +
+    geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+    theme_minimal() +
+    labs(
+      x = expression(paste("True ", beta)),
+      y = expression(paste("Estimated ", beta))
+    )
+
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig_beta_recovery,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig_beta_recovery
+}

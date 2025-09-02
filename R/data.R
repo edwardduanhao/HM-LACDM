@@ -44,13 +44,13 @@
 #'
 #' @export
 data_generate <- function(
-    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, device = "auto") {
+    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, mode = "strong", device = "auto") {
   # Setup device
-  device <- get_device(device) # nolint
+  device <- get_device(device)
 
   # Set random seed for reproducibility
   if (!is.null(seed)) {
-    torch_manual_seed(seed = seed) # nolint
+    torch_manual_seed(seed = seed)
   }
 
   # Number of possible attribute profiles
@@ -58,15 +58,15 @@ data_generate <- function(
 
   # Generate Q-Matrix if it is not given
   if (is.null(q_mat)) {
-    q_mat <- torch_randint( # nolint
+    q_mat <- torch_randint(
       low = 1, # inclusive
       high = l, # exclusive
       size = j
     ) |>
-      as_array() |> # nolint
+      as_array() |>
       sapply(
         \(int_class) {
-          int_to_bin( # nolint
+          int_to_bin(
             x = int_class,
             d = k
           )
@@ -77,27 +77,27 @@ data_generate <- function(
 
   # Generate the delta matrix for each item
   delta_mat <- lapply(seq(j), \(j_iter) {
-    build_delta( # nolint
+    build_delta(
       q = q_mat[j_iter, ],
       interact = FALSE
     ) |>
-      torch_tensor(device = device) # nolint
+      torch_tensor(device = device)
   })
 
   # Generate the beta vector for each item
   beta <- rowSums(q_mat) |>
     lapply(\(k_iter) {
-      build_beta( # nolint
-        k = k_iter
+      build_beta(
+        k = k_iter,
+        mode = mode
       ) |>
-        torch_tensor(device = device) # nolint
+        torch_tensor(device = device)
     })
 
 
   # Initial distribution of the latent attributes
-  pii <- torch_ones(l, dtype = torch_float(), device = device) / l # nolint
-  # pii <- nnf_softmax(torch_randn(l, dtype = torch_float(),
-  # device = device), 1)
+  pii <- torch_ones(l, dtype = torch_float(), device = device) / l + torch_randn(l, dtype = torch_float(), device = device) * 0.5
+  pii <- nnf_softmax(pii, dim = 1)
 
   # Transition probability for each attribute
   kernel_mat <- matrix(c(0.7, 0.3, 0.2, 0.8),
@@ -106,12 +106,12 @@ data_generate <- function(
   )
 
   # Construct tau matrix from kernel_mat
-  tau <- torch_ones(l, l, dtype = torch_float(), device = device) # nolint
+  tau <- torch_ones(l, l, dtype = torch_float(), device = device)
 
   for (l_prev in seq(l)) {
-    profile_prev <- int_to_bin(l_prev - 1, d = k) # nolint
+    profile_prev <- int_to_bin(l_prev - 1, d = k)
     for (l_after in seq(l)) {
-      profile_after <- int_to_bin(l_after - 1, d = k) # nolint
+      profile_after <- int_to_bin(l_after - 1, d = k)
       for (k_iter in seq(k)) {
         tau[l_prev, l_after] <- tau[l_prev, l_after] *
           kernel_mat[profile_prev[k_iter] + 1, profile_after[k_iter] + 1]
@@ -122,36 +122,36 @@ data_generate <- function(
   # Sample the latent attribute profiles over time
   int_class <- array(0, c(i, t))
 
-  int_class[, 1] <- torch_multinomial(pii, # nolint
+  int_class[, 1] <- torch_multinomial(pii,
     num_samples = i,
     replacement = TRUE
   ) |>
-    as_array() # nolint
+    as_array()
 
   for (t_iter in seq(2, t)) {
     for (l_iter in seq(l)) {
       index <- int_class[, t_iter - 1] == l_iter
       n_samples <- as.integer(sum(index))
       if (n_samples > 0) {
-        int_class[index, t_iter] <- torch_multinomial(tau[l_iter, ], # nolint
+        int_class[index, t_iter] <- torch_multinomial(tau[l_iter, ],
           num_samples = n_samples,
           replacement = TRUE
         ) |>
-          as_array() # nolint
+          as_array()
       }
     }
   }
 
   # Generate Response Matrix Y
 
-  y_mat <- torch_zeros(n_dataset, i, t, j, device = device) # nolint
+  y_mat <- torch_zeros(n_dataset, i, t, j, device = device)
 
   for (t_iter in 1:t) {
     for (j_iter in 1:j) {
       delta_mat_t <- delta_mat[[j_iter]][as.numeric(int_class[, t_iter]), ]
-      y_sampler <- (delta_mat_t %@% beta[[j_iter]]) |> # nolint
-        torch_sigmoid() |> # nolint
-        distr_bernoulli() # nolint
+      y_sampler <- (delta_mat_t %@% beta[[j_iter]]) |>
+        torch_sigmoid() |>
+        distr_bernoulli()
       y_mat[, , t_iter, j_iter] <- y_sampler$sample(n_dataset)
     }
   }
@@ -166,7 +166,7 @@ data_generate <- function(
 
   for (t_iter in seq(t)) {
     for (i_iter in seq(i)) {
-      profiles_mat[i_iter, t_iter, ] <- int_to_bin( # nolint
+      profiles_mat[i_iter, t_iter, ] <- int_to_bin(
         x = int_class[i_iter, t_iter] - 1,
         d = k
       )
@@ -175,7 +175,7 @@ data_generate <- function(
 
   ground_truth <- list(
     "q_mat" = q_mat,
-    "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)), # nolint
+    "beta" = lapply(beta, \(beta_vec) as_array(beta_vec)),
     "pii" = as_array(pii),
     "tau" = as_array(tau),
     "profiles_index" = int_class,
@@ -183,7 +183,7 @@ data_generate <- function(
   )
 
   list(
-    "y" = as_array(y_mat), # nolint
+    "y" = as_array(y_mat),
     "k" = k,
     "ground_truth" = ground_truth
   )

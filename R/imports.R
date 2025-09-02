@@ -2,6 +2,8 @@
 # This file handles all package-level imports
 
 #' @import torch
+#' @import tmvtnorm
+#' @import Matrix
 #' @import zeallot
 #' @import iterpc
 #' @import cli

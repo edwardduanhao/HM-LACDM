@@ -43,7 +43,7 @@ The algorithm uses log-space computations to maintain numerical stability.
 # Assuming appropriate torch tensors are available
 result <- update_z(log_phi, log_kappa, log_eta)
 e_z <- result[[1]]
-e_z_inter <- result[[2]]
+e_zz <- result[[2]]
 }
 
 }

@@ -30,8 +30,8 @@
 #' @importFrom torch torch_abs torch_tanh
 #' @export
 jj_func <- function(xi, epsilon = 1e-10) {
-  x <- torch_abs(xi) + epsilon # nolint
-  return(torch_tanh(x / 2) / (4 * x)) # nolint
+  x <- torch_abs(xi) + epsilon
+  return(torch_tanh(x / 2) / (4 * x))
 }
 
 # ------------------------------------------------------------------------- #
@@ -77,7 +77,7 @@ jj_func <- function(xi, epsilon = 1e-10) {
 #' @export
 update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi) {
   # Extract dimensions from response tensor
-  c(i, t, j) %<-% y$shape # nolint
+  c(i, t, j) %<-% y$shape
 
   # Sum over individuals and time points to get class weights
   weights_z <- e_z$sum(c(1, 2))
@@ -92,19 +92,19 @@ update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi) {
     delta_mat_j <- delta_mat[[j_iter]]
 
     # Update posterior covariance matrix
-    v_beta[[j_iter]] <- torch_inverse( # nolint
+    v_beta[[j_iter]] <- torch_inverse(
       v_beta_prior[[j_iter]]$inverse() +
         2 * (
-          delta_mat_j$t() %@% # nolint
-            torch_diag_embed(weights_z * jj_func(xi[j_iter, ])) %@% # nolint
+          delta_mat_j$t() %@%
+            torch_diag_embed(weights_z * jj_func(xi[j_iter, ])) %@%
             delta_mat_j
         )
     )
 
     # Update posterior mean vector
-    m_beta[[j_iter]] <- v_beta[[j_iter]] %@% ( # nolint
+    m_beta[[j_iter]] <- v_beta[[j_iter]] %@% (
       v_beta_prior[[j_iter]]$inverse() %@% m_beta_prior[[j_iter]] +
-        delta_mat_j$t() %@% torch_einsum( # nolint
+        delta_mat_j$t() %@% torch_einsum(
           "ntl,nt->l", list(e_z, y[, , j_iter] - 1 / 2)
         )
     )
@@ -155,14 +155,51 @@ update_xi <- function(m_beta, v_beta, delta_mat) {
   # Use same device as input tensors
   device <- m_beta[[1]]$device
 
-  xi <- torch_zeros(j, 2^k, device = device) # nolint
+  xi <- torch_zeros(j, 2^k, device = device)
 
   for (j_iter in seq(j)) {
     e_beta2 <- m_beta[[j_iter]]$outer(m_beta[[j_iter]]) + v_beta[[j_iter]]
 
-    xi[j_iter, ] <- delta_mat[[j_iter]] %@% e_beta2 %@% delta_mat[[j_iter]]$t() |> # nolint
-      torch_diag() |> # nolint
-      torch_sqrt() # nolint
+    xi[j_iter, ] <- delta_mat[[j_iter]] %@% e_beta2 %@% delta_mat[[j_iter]]$t() |>
+      torch_diag() |>
+      torch_sqrt()
+  }
+
+  xi
+}
+
+#' @importFrom tmvtnorm mtmvnorm
+#' @importFrom Matrix nearPD
+#' @export
+update_xi_truncate <- function(m_beta, v_beta, delta_mat) {
+  j <- length(m_beta)
+
+  # Number of attributes
+  k <- m_beta[[1]]$shape - 1
+
+  # Use same device as input tensors
+  device <- m_beta[[1]]$device
+
+  xi <- torch_zeros(j, 2^k, device = device)
+
+  lower <- c(-Inf, rep(0, k))
+  upper <- rep(5, k + 1)
+
+  for (j_iter in seq(j)) {
+    tmp <- mtmvnorm(
+      mean = as_array(m_beta[[j_iter]]), sigma = as.matrix(nearPD(as_array(v_beta[[j_iter]]), corr = TRUE)$mat),
+      lower = lower, upper = upper
+    )
+
+    mean_beta <- torch_tensor(tmp$tmean, device = device)
+
+    cov_beta <- torch_tensor(as.matrix(nearPD(tmp$tvar, corr = TRUE)$mat), device = device)
+
+    e_beta2 <- mean_beta$outer(mean_beta) + cov_beta
+
+    xi[j_iter, ] <- delta_mat[[j_iter]] %@% e_beta2 %@% delta_mat[[j_iter]]$t() |>
+      torch_diag() |>
+      torch_sqrt()
   }
 
   xi
@@ -269,35 +306,35 @@ update_alpha <- function(alpha_prior, e_z) {
 #' # Assuming appropriate torch tensors are available
 #' result <- update_z(log_phi, log_kappa, log_eta)
 #' e_z <- result[[1]]
-#' e_zz<- result[[2]]
+#' e_zz <- result[[2]]
 #' }
 #'
 #' @importFrom torch torch_zeros
 #' @export
 update_z <- function(log_phi, log_kappa, log_eta, epsilon = 1e-10) {
-  c(i, t, l) %<-% log_phi$shape # nolint
+  c(i, t, l) %<-% log_phi$shape
 
   # Use same device as input tensors
   device <- log_phi$device
 
-  log_f <- torch_zeros(c(i, t, l), dtype = torch_float(), device = device) # nolint
+  log_f <- torch_zeros(c(i, t, l), dtype = torch_float(), device = device)
 
-  log_b <- torch_zeros(c(i, t, l), dtype = torch_float(), device = device) # nolint
+  log_b <- torch_zeros(c(i, t, l), dtype = torch_float(), device = device)
 
   log_f[, 1, ] <- log_kappa + log_phi[, 1, ]
 
   for (t_iter in 2:t) {
     log_f[, t_iter, ] <- log_phi[, t_iter, ] +
-      torch_logsumexp(log_f[, t_iter - 1, , NULL] + log_eta, 2) # nolint
+      torch_logsumexp(log_f[, t_iter - 1, , NULL] + log_eta, 2)
 
-    log_b[, t - t_iter + 1, ] <- torch_logsumexp( # nolint
+    log_b[, t - t_iter + 1, ] <- torch_logsumexp(
       log_phi[, t - t_iter + 2, , NULL] +
         log_b[, t - t_iter + 2, , NULL] + log_eta, 2
     )
   }
 
   # add epsilon to avoid numerical issues
-  e_z <- nnf_softmax(log_f + log_b, 3) + epsilon # nolint
+  e_z <- nnf_softmax(log_f + log_b, 3) + epsilon
 
   e_z <- e_z / e_z$sum(dim = 3, keepdim = TRUE) # renormalise
 
@@ -305,7 +342,7 @@ update_z <- function(log_phi, log_kappa, log_eta, epsilon = 1e-10) {
     log_eta + log_phi[, 2:t, NULL, ]
 
   # add epsilon to avoid numerical issues
-  e_zz <- nnf_softmax(temp$view(c(i, t - 1, -1)), 3) + epsilon # nolint
+  e_zz <- nnf_softmax(temp$view(c(i, t - 1, -1)), 3) + epsilon
 
   e_zz <- e_zz / e_zz$sum(dim = 3, keepdim = TRUE) # renormalise
 
@@ -341,7 +378,7 @@ update_z <- function(log_phi, log_kappa, log_eta, epsilon = 1e-10) {
 #' @importFrom torch torch_digamma
 #' @export
 e_log_pi <- function(alpha) {
-  torch_digamma(alpha) - torch_digamma(alpha$sum()) # nolint
+  torch_digamma(alpha) - torch_digamma(alpha$sum())
 }
 
 # ------------------------------------------------------------------------- #
@@ -371,7 +408,7 @@ e_log_pi <- function(alpha) {
 #' @importFrom torch torch_digamma
 #' @export
 e_log_omega <- function(omega) {
-  torch_digamma(omega) - torch_digamma(omega$sum(1)) # nolint
+  torch_digamma(omega) - torch_digamma(omega$sum(1))
 }
 
 # ------------------------------------------------------------------------- #
@@ -417,21 +454,21 @@ e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
 
   # Use same device as input tensors
   device <- y$device
-  f_beta <- torch_zeros(j, 2^k, device = device) # nolint
-  f_beta2 <- torch_zeros(j, 2^k, device = device) # nolint
+  f_beta <- torch_zeros(j, 2^k, device = device)
+  f_beta2 <- torch_zeros(j, 2^k, device = device)
 
   for (j_iter in seq(j)) {
-    f_beta[j_iter, ] <- delta_mat[[j_iter]] %@% m_beta[[j_iter]] # nolint
+    f_beta[j_iter, ] <- delta_mat[[j_iter]] %@% m_beta[[j_iter]]
 
-    e_beta2 <- m_beta[[j_iter]]$outer(m_beta[[j_iter]]) + v_beta[[j_iter]] # nolint
+    e_beta2 <- m_beta[[j_iter]]$outer(m_beta[[j_iter]]) + v_beta[[j_iter]]
 
-    f_beta2[j_iter, ] <- (delta_mat[[j_iter]] %@% e_beta2 %@% # nolint
-                            delta_mat[[j_iter]]$t())$diagonal()
+    f_beta2[j_iter, ] <- (delta_mat[[j_iter]] %@% e_beta2 %@%
+      delta_mat[[j_iter]]$t())$diagonal()
   }
 
   log_phi <- (
     (y$unsqueeze(-1) - 1 / 2) * f_beta +
-      (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) * (f_beta2 - xi$square())) # nolint
+      (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) * (f_beta2 - xi$square()))
   )$sum(dim = 3)
 
   log_phi
@@ -487,20 +524,11 @@ e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
 #' }
 #'
 #' @export
-q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
+q_mat_recovery <- function(beta_hat, beta_hat_sd, beta_hat_trace,
                            alpha_level = 0.05, q_mat_true = NULL) {
-  j <- length(m_beta)
+  c(j, k) %<-% dim(beta_hat)
 
-  beta_hat <- sapply(m_beta, \(x) as_array(x)) |> t() # nolint
-
-  k <- ncol(beta_hat) - 1
-
-  # Compute standard deviations
-  beta_hat_sd <- sapply(v_beta, \(x) sqrt(as_array(torch_diag(x)))) |> t() # nolint
-
-  beta_hat_trace <- torch_stack(beta_hat_trace) |> # nolint
-    torch_transpose(1, 2) |> # nolint
-    as_array() # nolint
+  k <- k - 1
 
   # Remove the intercept term if all values are negative
   intercept_detected <- FALSE
@@ -565,13 +593,13 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
   }
 
   if (!is.null(q_mat_true)) {
-    q_mat_hat_best <- q_mat_hat # nolint
+    q_mat_hat_best <- q_mat_hat
 
     idx_best <- NULL
 
     acc <- 0
 
-    it <- iterpc(k, k, ordered = TRUE) # nolint
+    it <- iterpc(k, k, ordered = TRUE)
 
     repeat {
       if (acc == 1) {
@@ -579,7 +607,7 @@ q_mat_recovery <- function(m_beta, v_beta, beta_hat_trace,
         break
       }
 
-      idx <- getnext(it, d = 1, drop = TRUE) # nolint
+      idx <- getnext(it, d = 1, drop = TRUE)
 
       if (length(idx) == 0) {
         break
@@ -693,7 +721,7 @@ compute_elbo <- function(y, delta_mat, m_beta, v_beta, m_beta_prior,
 
   # Use same device as input tensors
   device <- y$device
-  elbo <- torch_zeros(1, dtype = torch_float(), device = device) # nolint
+  elbo <- torch_zeros(1, dtype = torch_float(), device = device)
 
   log_phi <- e_log_phi(
     y = y,
@@ -709,26 +737,26 @@ compute_elbo <- function(y, delta_mat, m_beta, v_beta, m_beta_prior,
     tmp <- m_beta[[j_iter]] - m_beta_prior[[j_iter]]
 
     elbo <- elbo - 1 / 2 * (v_beta[[j_iter]] + tmp$outer(tmp)) |>
-      torch_matmul(v_beta_prior[[j_iter]]$inverse()) |> # nolint
-      torch_trace() # nolint
+      torch_matmul(v_beta_prior[[j_iter]]$inverse()) |>
+      torch_trace()
 
-    elbo <- elbo + 1 / 2 * torch_logdet(v_beta[[j_iter]]) # nolint
+    elbo <- elbo + 1 / 2 * torch_logdet(v_beta[[j_iter]])
   }
 
   elbo <- elbo + (
-    (torch_digamma(alpha) - torch_digamma(alpha$sum())) * # nolint
+    (torch_digamma(alpha) - torch_digamma(alpha$sum())) *
       (alpha_prior - alpha + e_z[, 1, ]$sum(1))
   )$sum()
 
   elbo <- elbo + (
-    (torch_digamma(omega) - torch_digamma(omega$sum(2))$unsqueeze(2)) * # nolint
+    (torch_digamma(omega) - torch_digamma(omega$sum(2))$unsqueeze(2)) *
       (omega_prior - omega + e_zz$sum(c(1, 2)))
   )$sum()
 
 
-  elbo <- elbo + torch_lgamma(alpha)$sum() - torch_lgamma(alpha$sum()) # nolint
+  elbo <- elbo + torch_lgamma(alpha)$sum() - torch_lgamma(alpha$sum())
 
-  elbo <- elbo + torch_lgamma(omega)$sum() - torch_lgamma(omega$sum(2))$sum() # nolint
+  elbo <- elbo + torch_lgamma(omega)$sum() - torch_lgamma(omega$sum(2))$sum()
 
   elbo <- elbo - (e_z[, 1, ] * e_z[, 1, ]$log())$sum()
 

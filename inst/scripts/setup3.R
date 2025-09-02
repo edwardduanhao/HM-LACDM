@@ -98,6 +98,10 @@ tau_rmse3 <- sapply(seq(n_dataset), \(i) {
     sqrt()
 })
 
+beta_rmse3 <- beta_rmse3[beta_rmse3 <= 1]
+pii_rmse3 <- pii_rmse3[beta_rmse3 <= 1]
+tau_rmse3 <- tau_rmse3[beta_rmse3 <= 1]
+
 fig_beta_rmse3 <- ggplot(data.frame(beta_rmse3), aes(x = beta_rmse3)) +
   geom_density(
     lwd = 1, colour = 2,
