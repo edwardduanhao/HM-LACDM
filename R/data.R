@@ -44,7 +44,7 @@
 #'
 #' @export
 data_generate <- function(
-    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, mode = "strong", device = "auto") {
+    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, signal = "strong", device = "auto") {
   # Setup device
   device <- get_device(device)
 
@@ -89,7 +89,7 @@ data_generate <- function(
     lapply(\(k_iter) {
       build_beta(
         k = k_iter,
-        mode = mode
+        signal = signal
       ) |>
         torch_tensor(device = device)
     })

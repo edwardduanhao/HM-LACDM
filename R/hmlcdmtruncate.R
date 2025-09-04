@@ -223,8 +223,10 @@ hmlcdm_vb_truncate <- function(data, max_iter = 100, alpha_level = 0.05,
   end_time <- Sys.time()
   print(m_beta)
 
-  return(list('m_beta' = m_beta,
-              'v_beta' = v_beta))
+  return(list(
+    "m_beta" = m_beta,
+    "v_beta" = v_beta
+  ))
 
   # --------------------- Post-hoc analysis --------------------- #
 

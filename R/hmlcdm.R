@@ -1,14 +1,8 @@
 # Variational inference for the HMLCDM model
 
-hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
-                      elbo = FALSE, device = "auto") {
+hmlcdm_vb <- function(data, max_iter = 100, elbo = FALSE, device = "auto") {
   # Setup device
   device <- get_device(device)
-
-  # Print the number of threads Torch is using
-  if (device == "cpu") {
-    print(paste("Torch is using", torch_get_num_threads(), "threads"))
-  }
 
   # Setup a timer
   start_time <- Sys.time()
@@ -52,8 +46,8 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
     beta_dim,
     \(d) {
       # Add small random perturbation to avoid identical initializations
-      base_init <- c(-3, rep(2, k))
-      noise <- torch_randn(d, device = device) * 0.001 # Small random noise
+      base_init <- c(-3, rep(1, k))
+      noise <- torch_randn(d, device = device) * 0.1 # Small random noise
       torch_tensor(base_init, device = device) + noise
     }
   )
@@ -77,7 +71,7 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 
   omega_prior <- torch_ones(l, l, dtype = torch_float(), device = device)
 
-  omega <- torch_ones(l, l, dtype = torch_float(), device = device) # + torch_randn(l, l, device = device) * 0.1
+  omega <- torch_ones(l, l, dtype = torch_float(), device = device) + torch_randn(l, l, device = device) * 0.1
 
   omega_trace <- torch_zeros(max_iter, l, l, device = device)
 
@@ -85,14 +79,14 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 
   alpha_prior <- torch_ones(l, dtype = torch_float(), device = device)
 
-  alpha <- torch_ones(l, dtype = torch_float(), device = device) # + torch_randn(l, device = device) * 0.1
+  alpha <- torch_ones(l, dtype = torch_float(), device = device) + torch_randn(l, device = device) * 0.1
 
   alpha_trace <- torch_zeros(max_iter, l, device = device)
 
   # Initialize z
 
   # Initialize with random perturbation around uniform distribution
-  e_z <- torch_ones(i, t, l, device = device) / l # + torch_rand(i, t, l, device = device) * 0.01
+  e_z <- torch_ones(i, t, l, device = device) / l + torch_rand(i, t, l, device = device) * 0.01
   # Ensure probabilities are positive and sum to 1 across latent classes
   e_z <- torch_abs(e_z)
   e_z <- e_z / e_z$sum(dim = 3, keepdim = TRUE)
@@ -246,7 +240,7 @@ hmlcdm_vb <- function(data, max_iter = 100, alpha_level = 0.05,
 # --------------------- Post-hoc analysis --------------------- #
 
 
-post_hoc <- function(res, alpha_level = 0.05, q_mat_true = NULL) {
+post_hoc <- function(res, data, alpha_level = 0.05, q_mat_true = NULL) {
   res_post <- res
 
   c(j, k) %<-% dim(res$beta)
@@ -276,14 +270,14 @@ post_hoc <- function(res, alpha_level = 0.05, q_mat_true = NULL) {
       beta_hat_sd = beta_hat_sd,
       beta_hat_trace = beta_hat_trace,
       alpha_level = alpha_level,
-      q_mat_true = data$ground_truth$q_mat
+      q_mat_true = q_mat_true
     )
 
     # Recovery of beta
     m_beta_true <- array(0, dim = c(j, k + 1))
 
     for (j_iter in seq(j)) {
-      m_beta_true[j_iter, c(TRUE, data$ground_truth$q_mat[j_iter, ] == 1)] <-
+      m_beta_true[j_iter, c(TRUE, q_mat_true[j_iter, ] == 1)] <-
         data$ground_truth$beta[[j_iter]]
     }
 

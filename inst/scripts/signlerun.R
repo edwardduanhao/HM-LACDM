@@ -5,7 +5,7 @@ q_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
 
 # Generate data
 data <- data_generate(
-  i = 200,
+  i = 500, # 10000
   k = 3,
   j = 21,
   t = 2,
@@ -19,13 +19,12 @@ data <- data_generate(
 res <- hmlcdm_vb(
   data = data,
   max_iter = 100,
-  alpha_level = 0.05,
   elbo = TRUE,
   device = "cpu"
 )
 
 # Run post-hoc analysis
-res <- post_hoc(res, alpha_level = 0.05, q_mat_true = data$ground_truth$q_mat)
+res <- post_hoc(res, data, alpha_level = 0.05, q_mat_true = data$ground_truth$q_mat)
 
 cat("Q-matrix recovery accuracy: ", res$q_mat_acc, "\n")
 

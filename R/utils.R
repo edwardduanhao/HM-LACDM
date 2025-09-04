@@ -175,15 +175,15 @@ build_delta <- function(q, interact = FALSE) {
 #' build_beta(4) # Returns c(-3, 1.5, 1.5, 1.5, 1.5)
 #'
 #' @export
-build_beta <- function(k, mode = "strong") {
-  if (mode == "strong") {
+build_beta <- function(k, signal = "strong") {
+  if (signal == "strong") {
     beta <- c(-3, rep(6 / k, k))
-  } else if (mode == "moderate") {
+  } else if (signal == "moderate") {
     beta <- c(-2, rep(4 / k, k))
-  } else if (mode == "weak") {
+  } else if (signal == "weak") {
     beta <- c(-1.5, rep(3 / k, k))
   } else {
-    stop("mode should be one of 'strong', 'moderate', or 'weak'")
+    stop("signal should be one of 'strong', 'moderate', or 'weak'")
   }
 
   beta
@@ -557,4 +557,52 @@ plot_beta_recovery <- function(
     )
   }
   fig_beta_recovery
+}
+
+
+# ---------------------------------------------------------------------------- #
+
+#' Plot the density of a vector
+#'
+#' @param vec A numeric vector for which to plot the density
+#' @param color Color for the density plot (default: 2)
+#' @param xlab Label for the x-axis (default: "RMSE")
+#' @param save Logical indicating whether to save the plot (default: TRUE)
+#' @param path The directory path to save the plot (default: "inst/figures/multiplerun/")
+#' @param file_name The name of the file to save the plot (default: "rmse.pdf")
+#'
+#' @return A ggplot object for the density plot
+#'
+#' @examples
+#' vec <- rnorm(100)
+#' plot_density(vec)
+#'
+#' @export
+plot_density <- function(
+    vec,
+    color = 2,
+    xlab = "RMSE",
+    save = TRUE,
+    path = "",
+    file_name = "rmse.pdf") {
+  fig <- ggplot(data.frame(vec), aes(x = vec)) +
+    geom_density(
+      lwd = 1,
+      colour = color,
+      fill = color,
+      alpha = 0.5
+    ) +
+    labs(x = xlab, y = "Density") +
+    theme_classic()
+  if (save) {
+    ggsave(
+      filename = file.path(path, file_name),
+      plot = fig,
+      width = 6,
+      height = 4,
+      units = "in",
+      dpi = 600
+    )
+  }
+  fig
 }

@@ -1,0 +1,12 @@
+"Metric","Mean","SD"
+"Runtime (seconds)",4.66447346448898,0.708113869737662
+"Profile accuracy",0.765465,0.0105275624295024
+"Q-matrix accuracy (0.05)",0.95175,0.0202154153823187
+"Q-matrix false positive rate (0.05)",0.04825,0.0202154153823187
+"Q-matrix false negative rate (0.05)",0,0
+"Q-matrix accuracy (0.01)",0.9785,0.0136175515581073
+"Q-matrix false positive rate (0.01)",0.0215,0.0136175515581073
+"Q-matrix false negative rate (0.01)",0,0
+"Beta RMSE",0.126803399714368,0.0112954639857298
+"Pii RMSE",0.0101567644444178,0.00160371995215096
+"Tau RMSE",0.042396641722861,0.00284299763614421

@@ -556,7 +556,26 @@ q_mat_recovery <- function(beta_hat, beta_hat_sd, beta_hat_trace,
   }
 
   if (!intercept_detected) {
-    stop("No intercept term detected.")
+    num_zeros <- sapply(seq(k + 1), \(col) sum(beta_hat[, col] == 0))
+
+    ind_intercept <- which.max(num_zeros)
+
+    cat("Column", ind_intercept, "is the intercept, will be removed. \n")
+
+    beta_hat_main <- beta_hat[, -ind_intercept]
+
+    beta_hat_sd_main <- beta_hat_sd[, -ind_intercept]
+
+    beta_hat_trace_main <- beta_hat_trace[, , -ind_intercept]
+
+    intercept_detected <- TRUE
+
+    beta_hat_intercept <- beta_hat[, ind_intercept]
+
+    beta_hat_sd_intercept <- beta_hat_sd[, ind_intercept]
+
+    beta_hat_trace_intercept <- beta_hat_trace[, , ind_intercept]
+
   }
 
   # perform one-side z-test for each entry
