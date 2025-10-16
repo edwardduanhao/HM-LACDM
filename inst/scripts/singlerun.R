@@ -17,7 +17,7 @@ data <- data_generate(
 )
 
 # Mask some data as NA (randomly mask 10% of responses)
-# data$y[sample(length(data$y), size = floor(0.8 * length(data$y)))] <- NA
+data$y[sample(length(data$y), size = floor(0.8 * length(data$y)))] <- NA
 
 # Run coordinate ascent variational inference for HMLCDM
 res <- hmlcdm_vb(

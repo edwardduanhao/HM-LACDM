@@ -1,10 +1,33 @@
-*.Rhistory
-*.RData
-*.DS_Store
-*.Rproj.user
-*.pdf
+# R session files
+.Rhistory
+.RData
+.Rapp.history
+
+# RStudio project files
 .Rproj.user
-data
-inst.figures
-inst.out
-R.hmlcdmtruncate.R
+.Rproj.user/
+
+# macOS system files
+.DS_Store
+
+# Generated output directories
+inst/out/
+inst/figures/
+
+# Temporary/development files
+R/hmlcdmtruncate.R
+
+# Keep important PDFs but exclude generated ones
+inst/out/**/*.pdf
+inst/figures/**/*.pdf
+
+# Allow package data directory (contains realdata.RData, etc.)
+# data/
+
+# Compiled objects
+*.o
+*.so
+*.dll
+
+# User-specific files
+*.Rproj.user

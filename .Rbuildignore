@@ -1,3 +1,13 @@
 ^HMLCDM\.Rproj$
+^HM-LACDM\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^\.Rhistory$
+^\.gitignore$
+^\.git$
+^README\.Rmd$
+^\.github$
+^inst/scripts$
+^inst/out$
+^inst/figures$
+^\.DS_Store$

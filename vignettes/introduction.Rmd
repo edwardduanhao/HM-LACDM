@@ -1,0 +1,232 @@
+---
+title: "Introduction to HM-LACDM"
+author: "Hao Duan"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to HM-LACDM}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Overview
+
+The **HM-LACDM** package implements a variational inference algorithm for Hidden Markov Longitudinal Additive Cognitive Diagnostic Models (HMLCDM). This package provides efficient Bayesian estimation of cognitive diagnostic models with temporal dependencies, making it ideal for analyzing longitudinal educational assessment data.
+
+## Installation
+
+You can install the development version from GitHub:
+
+```{r, eval = FALSE}
+# Install devtools if needed
+if (!requireNamespace("devtools", quietly = TRUE)) {
+  install.packages("devtools")
+}
+
+# Install HM-LACDM
+devtools::install_github("edwardduanhao/HMLCDM")
+```
+
+## Quick Start Example
+
+This tutorial demonstrates the basic workflow for using HM-LACDM to simulate data, fit the model, and visualize results.
+
+### Load the Package
+
+```{r, eval = FALSE}
+library(HM-LACDM)
+```
+
+### 1. Generate Synthetic Data
+
+First, we generate synthetic longitudinal assessment data with known parameters:
+
+```{r, eval = FALSE}
+# Set simulation parameters
+n_examinees <- 200   # Number of examinees
+n_attributes <- 3    # Number of cognitive attributes
+n_items <- 25        # Number of assessment items
+n_timepoints <- 2    # Number of time points
+
+# Generate data
+set.seed(42)
+sim_data <- data_generate(
+  i = n_examinees,
+  k = n_attributes,
+  j = n_items,
+  t = n_timepoints
+)
+
+# View structure
+str(sim_data, max.level = 1)
+```
+
+The generated data includes:
+
+- `y`: Response matrix (examinees × time points × items)
+- `k`: Number of attributes
+- `ground_truth`: True parameter values for validation
+
+### 2. Fit the Model
+
+Now we fit the HMLCDM using variational Bayes inference:
+
+```{r, eval = FALSE}
+# Fit model
+results <- hmlcdm_vb(
+  data = sim_data,
+  max_iter = 100,      # Maximum iterations
+  elbo = TRUE,         # Track Evidence Lower Bound
+  device = "auto"      # Use GPU if available
+)
+
+# View results structure
+names(results)
+```
+
+The `results` object contains:
+
+- `m_beta`: Estimated item parameters
+- `m_pii`: Estimated initial profile distribution
+- `m_tau`: Estimated transition probabilities
+- `m_alpha`: Estimated individual attribute profiles
+- `elbo_trace`: Convergence diagnostic (if `elbo = TRUE`)
+- `time_elapsed`: Computation time
+
+### 3. Visualize Parameter Recovery
+
+Since we used simulated data with known parameters, we can assess parameter recovery:
+
+#### Item Parameters (β)
+
+```{r, eval = FALSE}
+plot_beta_recovery(results, sim_data$ground_truth$beta)
+```
+
+This scatter plot shows estimated vs. true item parameters. Points should cluster along the diagonal line for good recovery.
+
+#### Initial Distribution (π)
+
+```{r, eval = FALSE}
+plot_pii_recovery(results, sim_data$ground_truth$pii)
+```
+
+#### Transition Probabilities (τ)
+
+```{r, eval = FALSE}
+plot_tau_recovery(results, sim_data$ground_truth$tau)
+```
+
+### 4. Check Convergence
+
+Examine the ELBO (Evidence Lower Bound) trace to verify convergence:
+
+```{r, eval = FALSE}
+plot_elbo_trace(results)
+```
+
+The ELBO should increase and stabilize, indicating successful convergence.
+
+### 5. Explore Parameter Traces
+
+View how parameters evolved during estimation:
+
+```{r, eval = FALSE}
+# Alpha (attribute mastery) traces
+plot_alpha_trace(results)
+
+# Beta (item parameter) traces
+plot_beta_trace(results)
+
+# Omega (variance parameter) traces
+plot_omega_trace(results)
+```
+
+## Real Data Analysis
+
+The package includes real assessment datasets for demonstration:
+
+```{r, eval = FALSE}
+# Load real data
+data("realdata", package = "HM-LACDM")
+
+# Fit model
+results_real <- hmlcdm_vb(
+  data = realdata,
+  max_iter = 150,
+  elbo = TRUE
+)
+
+# View results
+plot_elbo_trace(results_real)
+```
+
+## GPU Acceleration
+
+For large datasets, GPU acceleration can significantly speed up computation:
+
+```{r, eval = FALSE}
+# Check if CUDA is available
+torch::torch_cuda_is_available()
+
+# Use GPU explicitly
+results_gpu <- hmlcdm_vb(
+  data = sim_data,
+  device = "cuda"
+)
+```
+
+## Model Details
+
+### Hidden Markov Longitudinal CDM
+
+The HM-LACDM combines three key components:
+
+1. **Cognitive Diagnostic Model (CDM)**: Links observed item responses to latent attribute mastery patterns
+2. **Hidden Markov Model (HMM)**: Models temporal transitions in attribute mastery
+3. **Variational Inference**: Provides fast approximate Bayesian inference
+
+### Key Parameters
+
+- **β (beta)**: Item parameters (intercepts + main effects for each attribute)
+- **π (pii)**: Initial distribution over attribute profiles at time 1
+- **τ (tau)**: Transition probability matrix between profiles over time
+- **α (alpha)**: Individual-level attribute mastery profiles
+
+### Advantages
+
+- **Fast**: Variational inference is much faster than MCMC
+- **Scalable**: Can handle large datasets with GPU acceleration
+- **Flexible**: Works with varying numbers of attributes, items, and time points
+- **Comprehensive**: Provides uncertainty quantification and diagnostic tools
+
+## Further Reading
+
+For more advanced usage, see the example scripts in `inst/scripts/`:
+
+- `singlerun.R` - Single model estimation workflow
+- `multipleruns.R` - Monte Carlo simulation studies
+- `realdata.R` - Real data analysis examples
+
+## Citation
+
+If you use this package in your research, please cite:
+
+```
+Duan, H. (2024). HM-LACDM: Variational Inference Algorithm for Hidden Markov
+  Longitudinal Additive Cognitive Diagnostic Models. R package version 0.1.0.
+  https://github.com/edwardduanhao/HMLCDM
+```
+
+## References
+
+For theoretical background on cognitive diagnostic models and variational inference, please refer to the relevant literature on CDMs, Hidden Markov Models, and variational Bayes methods.
