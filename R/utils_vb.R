@@ -34,24 +34,26 @@ jj_func <- function(xi, epsilon = 1e-10) {
   return(torch_tanh(x / 2) / (4 * x))
 }
 
+
 # ------------------------------------------------------------------------- #
 
-#' Update Beta Parameters for Variational Inference
+#' Update Beta Parameters for Variational Inference (with Missing Data)
 #'
 #' Updates the variational posterior parameters for item-effect parameters
 #' (beta) in the Hidden Markov Log-Linear Cognitive Diagnostic Model using
-#' coordinate ascent variational inference.
+#' coordinate ascent variational inference. This version handles missing data
+#' by only using observed responses in the sufficient statistics.
 #'
 #' @param y A torch tensor of shape (i, t, j) containing binary response data,
 #'   where i is the number of individuals, t is the number of time points,
-#'   and j is the number of items
+#'   and j is the number of items. Missing values should be represented as NaN.
 #' @param k An integer specifying the number of attributes
 #' @param m_beta_prior A list of length j containing prior mean vectors for
 #'   beta parameters
 #' @param v_beta_prior A list of length j containing prior covariance matrices
 #'   for beta parameters
 #' @param delta_mat A list of length j containing design matrices for each item
-#' @param z A torch tensor of shape (i, t, l) containing expected latent class
+#' @param e_z A torch tensor of shape (i, t, l) containing expected latent class
 #'   memberships, where l = 2^k is the number of latent classes
 #' @param xi A torch tensor of shape (j, l) containing auxiliary variational
 #'   parameters for the Jaakkola-Jordan bound
@@ -63,13 +65,19 @@ jj_func <- function(xi, epsilon = 1e-10) {
 #'   }
 #'
 #' @details This function implements the coordinate ascent variational inference
-#'   update for the item-effect parameters in the HM-LCDM. The updates use the
-#'   Jaakkola-Jordan lower bound to handle the nonconjugate logistic likelihood.
+#'   update for the item-effect parameters in the HM-LCDM, accounting for missing
+#'   data. Missing values (NaN) are excluded from the sufficient statistics, so
+#'   only observed responses contribute to the parameter updates. The updates use
+#'   the Jaakkola-Jordan lower bound to handle the nonconjugate logistic likelihood.
 #'
 #' @examples
 #' \dontrun{
+#' # Create response data with missing values
+#' y <- torch_randn(100, 5, 20)
+#' y[1:10, 1, 1] <- NaN # Set some values as missing
+#'
 #' # Assuming appropriate torch tensors and parameters are available
-#' result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
+#' result <- update_beta_missing(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
 #' updated_means <- result$m_beta
 #' updated_covariances <- result$v_beta
 #' }
@@ -79,8 +87,9 @@ update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi) {
   # Extract dimensions from response tensor
   c(i, t, j) %<-% y$shape
 
-  # Sum over individuals and time points to get class weights
-  weights_z <- e_z$sum(c(1, 2))
+  # Create missing data mask: TRUE for observed, FALSE for missing
+  # Missing values are identified as NaN or NA
+  obs_mask <- !torch_isnan(y)
 
   # Initialize storage for posterior parameters
   m_beta <- vector("list", j)
@@ -91,21 +100,34 @@ update_beta <- function(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi) {
   for (j_iter in seq(j)) {
     delta_mat_j <- delta_mat[[j_iter]]
 
+    # Get observation mask for this item
+    obs_mask_j <- obs_mask[, , j_iter]
+
+    # Compute weighted sum of e_z, only counting observed responses
+    # Shape: (i, t, l) * (i, t, 1) -> sum over (i, t) -> (l,)
+    weights_z_j <- (e_z * obs_mask_j$to(dtype = torch_float())$unsqueeze(3))$sum(c(1, 2))
+
     # Update posterior covariance matrix
     v_beta[[j_iter]] <- torch_inverse(
       v_beta_prior[[j_iter]]$inverse() +
         2 * (
           delta_mat_j$t() %@%
-            torch_diag_embed(weights_z * jj_func(xi[j_iter, ])) %@%
+            torch_diag_embed(weights_z_j * jj_func(xi[j_iter, ])) %@%
             delta_mat_j
         )
     )
 
+    # Replace missing values with 0 to avoid NaN in computation
+    # (they will be masked out anyway)
+    y_j <- y[, , j_iter]$clone()
+    y_j <- torch_where(obs_mask_j, y_j, torch_zeros_like(y_j))
+
     # Update posterior mean vector
+    # Only observed responses contribute to the sufficient statistic
     m_beta[[j_iter]] <- v_beta[[j_iter]] %@% (
       v_beta_prior[[j_iter]]$inverse() %@% m_beta_prior[[j_iter]] +
         delta_mat_j$t() %@% torch_einsum(
-          "ntl,nt->l", list(e_z, y[, , j_iter] - 1 / 2)
+          "ntl,nt->l", list(e_z * obs_mask_j$to(dtype = torch_float())$unsqueeze(3), y_j - 1 / 2)
         )
     )
   }
@@ -395,7 +417,7 @@ e_log_pi <- function(alpha) {
 #' @return A torch tensor of shape (l, l) containing the expected values
 #'   of log(ω_{jk}) for transitions from latent class j to class k
 #'
-#' @details This function computes E[log(ω_{jk})] = ψ(ω_{jk}) - ψ(Σ_k ω_{jk})
+#' @details This function computes E{log(ω_{jk})} = ψ(ω_{jk}) - ψ(Σ_k ω_{jk})
 #'   where ψ is the digamma function. This expectation is used in the
 #'   variational lower bound computation for the transition probabilities.
 #'
@@ -448,6 +470,32 @@ e_log_omega <- function(omega) {
 #' }
 #'
 #' @export
+# e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
+#   j <- length(m_beta)
+#   k <- m_beta[[1]]$shape - 1
+
+#   # Use same device as input tensors
+#   device <- y$device
+#   f_beta <- torch_zeros(j, 2^k, device = device)
+#   f_beta2 <- torch_zeros(j, 2^k, device = device)
+
+#   for (j_iter in seq(j)) {
+#     f_beta[j_iter, ] <- delta_mat[[j_iter]] %@% m_beta[[j_iter]]
+
+#     e_beta2 <- m_beta[[j_iter]]$outer(m_beta[[j_iter]]) + v_beta[[j_iter]]
+
+#     f_beta2[j_iter, ] <- (delta_mat[[j_iter]] %@% e_beta2 %@%
+#       delta_mat[[j_iter]]$t())$diagonal()
+#   }
+
+#   log_phi <- (
+#     (y$unsqueeze(-1) - 1 / 2) * f_beta +
+#       (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) * (f_beta2 - xi$square()))
+#   )$sum(dim = 3)
+
+#   log_phi
+# }
+
 e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
   j <- length(m_beta)
   k <- m_beta[[1]]$shape - 1
@@ -466,10 +514,20 @@ e_log_phi <- function(y, m_beta, v_beta, xi, delta_mat) {
       delta_mat[[j_iter]]$t())$diagonal()
   }
 
-  log_phi <- (
-    (y$unsqueeze(-1) - 1 / 2) * f_beta +
+  # Create missing data mask: TRUE for observed, FALSE for missing
+  obs_mask <- !torch_isnan(y)
+
+  # Replace missing y values with 0 (will be masked out)
+  y_clean <- torch_where(obs_mask, y, torch_zeros_like(y))
+
+  # Compute log phi for all items
+  log_phi_all <- (
+    (y_clean$unsqueeze(-1) - 1 / 2) * f_beta +
       (nnf_logsigmoid(xi) - xi / 2 - jj_func(xi) * (f_beta2 - xi$square()))
-  )$sum(dim = 3)
+  )
+
+  # Mask out missing values before summing
+  log_phi <- (log_phi_all * obs_mask$to(dtype = torch_float())$unsqueeze(-1))$sum(dim = 3)
 
   log_phi
 }
@@ -575,7 +633,6 @@ q_mat_recovery <- function(beta_hat, beta_hat_sd, beta_hat_trace,
     beta_hat_sd_intercept <- beta_hat_sd[, ind_intercept]
 
     beta_hat_trace_intercept <- beta_hat_trace[, , ind_intercept]
-
   }
 
   # perform one-side z-test for each entry
@@ -731,6 +788,63 @@ q_mat_recovery <- function(beta_hat, beta_hat_sd, beta_hat_trace,
 #' }
 #'
 #' @export
+# compute_elbo <- function(y, delta_mat, m_beta, v_beta, m_beta_prior,
+#                          v_beta_prior, alpha, alpha_prior, omega,
+#                          omega_prior, e_z, e_zz, xi) {
+#   j <- length(m_beta)
+
+#   t <- y$shape[2]
+
+#   # Use same device as input tensors
+#   device <- y$device
+#   elbo <- torch_zeros(1, dtype = torch_float(), device = device)
+
+#   log_phi <- e_log_phi(
+#     y = y,
+#     m_beta = m_beta,
+#     v_beta = v_beta,
+#     xi = xi,
+#     delta_mat = delta_mat
+#   )
+
+#   elbo <- elbo + (log_phi * e_z)$sum()
+
+#   for (j_iter in seq(j)) {
+#     tmp <- m_beta[[j_iter]] - m_beta_prior[[j_iter]]
+
+#     elbo <- elbo - 1 / 2 * (v_beta[[j_iter]] + tmp$outer(tmp)) |>
+#       torch_matmul(v_beta_prior[[j_iter]]$inverse()) |>
+#       torch_trace()
+
+#     elbo <- elbo + 1 / 2 * torch_logdet(v_beta[[j_iter]])
+#   }
+
+#   elbo <- elbo + (
+#     (torch_digamma(alpha) - torch_digamma(alpha$sum())) *
+#       (alpha_prior - alpha + e_z[, 1, ]$sum(1))
+#   )$sum()
+
+#   elbo <- elbo + (
+#     (torch_digamma(omega) - torch_digamma(omega$sum(2))$unsqueeze(2)) *
+#       (omega_prior - omega + e_zz$sum(c(1, 2)))
+#   )$sum()
+
+
+#   elbo <- elbo + torch_lgamma(alpha)$sum() - torch_lgamma(alpha$sum())
+
+#   elbo <- elbo + torch_lgamma(omega)$sum() - torch_lgamma(omega$sum(2))$sum()
+
+#   elbo <- elbo - (e_z[, 1, ] * e_z[, 1, ]$log())$sum()
+
+#   elbo <- elbo - (
+#     e_zz * (
+#       e_zz$log() - e_z[, 1:(t - 1), ]$unsqueeze(4)$log()
+#     )
+#   )$sum()
+
+#   elbo$item()
+# }
+
 compute_elbo <- function(y, delta_mat, m_beta, v_beta, m_beta_prior,
                          v_beta_prior, alpha, alpha_prior, omega,
                          omega_prior, e_z, e_zz, xi) {

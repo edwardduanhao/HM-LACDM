@@ -2,14 +2,14 @@
 % Please edit documentation in R/utils_vb.R
 \name{update_beta}
 \alias{update_beta}
-\title{Update Beta Parameters for Variational Inference}
+\title{Update Beta Parameters for Variational Inference (with Missing Data)}
 \usage{
 update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
 }
 \arguments{
 \item{y}{A torch tensor of shape (i, t, j) containing binary response data,
 where i is the number of individuals, t is the number of time points,
-and j is the number of items}
+and j is the number of items. Missing values should be represented as NaN.}
 
 \item{k}{An integer specifying the number of attributes}
 
@@ -21,11 +21,11 @@ for beta parameters}
 
 \item{delta_mat}{A list of length j containing design matrices for each item}
 
+\item{e_z}{A torch tensor of shape (i, t, l) containing expected latent class
+memberships, where l = 2^k is the number of latent classes}
+
 \item{xi}{A torch tensor of shape (j, l) containing auxiliary variational
 parameters for the Jaakkola-Jordan bound}
-
-\item{z}{A torch tensor of shape (i, t, l) containing expected latent class
-memberships, where l = 2^k is the number of latent classes}
 }
 \value{
 A list containing:
@@ -37,17 +37,24 @@ A list containing:
 \description{
 Updates the variational posterior parameters for item-effect parameters
 (beta) in the Hidden Markov Log-Linear Cognitive Diagnostic Model using
-coordinate ascent variational inference.
+coordinate ascent variational inference. This version handles missing data
+by only using observed responses in the sufficient statistics.
 }
 \details{
 This function implements the coordinate ascent variational inference
-update for the item-effect parameters in the HM-LCDM. The updates use the
-Jaakkola-Jordan lower bound to handle the nonconjugate logistic likelihood.
+update for the item-effect parameters in the HM-LCDM, accounting for missing
+data. Missing values (NaN) are excluded from the sufficient statistics, so
+only observed responses contribute to the parameter updates. The updates use
+the Jaakkola-Jordan lower bound to handle the nonconjugate logistic likelihood.
 }
 \examples{
 \dontrun{
+# Create response data with missing values
+y <- torch_randn(100, 5, 20)
+y[1:10, 1, 1] <- NaN # Set some values as missing
+
 # Assuming appropriate torch tensors and parameters are available
-result <- update_beta(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
+result <- update_beta_missing(y, k, m_beta_prior, v_beta_prior, delta_mat, e_z, xi)
 updated_means <- result$m_beta
 updated_covariances <- result$v_beta
 }

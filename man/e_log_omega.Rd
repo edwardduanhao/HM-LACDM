@@ -20,7 +20,7 @@ Computes the expectation of the logarithm of the transition matrix
 parameters (omega) under a Dirichlet posterior distribution.
 }
 \details{
-This function computes E\link{log(ω_{jk})} = ψ(ω_{jk}) - ψ(Σ_k ω_{jk})
+This function computes E{log(ω_{jk})} = ψ(ω_{jk}) - ψ(Σ_k ω_{jk})
 where ψ is the digamma function. This expectation is used in the
 variational lower bound computation for the transition probabilities.
 }

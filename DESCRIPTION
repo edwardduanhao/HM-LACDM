@@ -1,5 +1,5 @@
-Package: HMLCDM
-Title: Variational Inference Algorithm for Hidden Markov Longitudinal Cognitive Diagnostic Models
+Package: HM-LACDM
+Title: Variational Inference Algorithm for Hidden Markov Longitudinal Additive Cognitive Diagnostic Models
 Version: 0.1.0
 Authors@R: 
     person("Hao", "Duan", , "hduan7@ucla.edu", role = c("aut", "cre"))
@@ -10,7 +10,7 @@ Description: Implements a variational inference algorithm for Hidden Markov
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Depends: R (>= 4.1.0)
 Imports:
     torch,

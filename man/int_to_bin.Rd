@@ -7,7 +7,7 @@
 int_to_bin(x, d)
 }
 \arguments{
-\item{x}{An integer to convert (must be in range \link{0, 2^d - 1})}
+\item{x}{An integer to convert, must be in range (0, 2^d - 1)}
 
 \item{d}{The desired length of the binary vector}
 }
@@ -20,7 +20,7 @@ Converts an integer to its binary representation as a vector of 0s and 1s
 with a specified length.
 }
 \examples{
-int_to_bin(5, 4)  # Returns c(1, 0, 1, 0)
-int_to_bin(0, 3)  # Returns c(0, 0, 0)
+int_to_bin(5, 4) # Returns c(1, 0, 1, 0)
+int_to_bin(0, 3) # Returns c(0, 0, 0)
 
 }

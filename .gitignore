@@ -4,3 +4,7 @@
 *.Rproj.user
 *.pdf
 .Rproj.user
+data
+inst.figures
+inst.out
+R.hmlcdmtruncate.R

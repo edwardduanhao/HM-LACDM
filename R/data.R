@@ -44,7 +44,7 @@
 #'
 #' @export
 data_generate <- function(
-    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, signal = "strong", device = "auto") {
+    i, k, j, t, n_dataset = 1, seed = NULL, q_mat = NULL, signal = "easy", device = "auto") {
   # Setup device
   device <- get_device(device)
 
@@ -122,11 +122,15 @@ data_generate <- function(
   # Sample the latent attribute profiles over time
   int_class <- array(0, c(i, t))
 
+  # int_class[,1] <- (t(sapply(rbeta(i, 0.4, 0.6), \(x){runif(k) < x})) * 1) %*%
+  #   (2 ^ (0:(k - 1))) + 1
+
   int_class[, 1] <- torch_multinomial(pii,
     num_samples = i,
     replacement = TRUE
   ) |>
     as_array()
+
 
   for (t_iter in seq(2, t)) {
     for (l_iter in seq(l)) {

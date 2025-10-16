@@ -23,7 +23,7 @@ Generates the delta matrix for a single item in a Cognitive Diagnosis Model
 }
 \examples{
 \dontrun{
-q_vector <- c(1, 1, 0)  # Item requires attributes 1 and 2
+q_vector <- c(1, 1, 0) # Item requires attributes 1 and 2
 delta_matrix <- build_delta(q_vector)
 }
 

@@ -4,10 +4,12 @@
 \alias{build_beta}
 \title{Build the beta vector (item parameters), up to 5 attributes (k <= 5)}
 \usage{
-build_beta(k)
+build_beta(k, signal = "strong")
 }
 \arguments{
 \item{k}{Number of attributes required by the item (at most 5)}
+
+\item{signal}{"strong", "moderate" or "weak". Character string indicating the signal strength}
 }
 \value{
 A numeric vector of item parameters (beta values)
@@ -17,7 +19,7 @@ Generates predefined beta (item parameter) vectors for items in a Cognitive
 Diagnosis Model based on the number of required attributes.
 }
 \examples{
-build_beta(2)  # Returns c(-3, 3, 3)
-build_beta(4)  # Returns c(-3, 1.5, 1.5, 1.5, 1.5)
+build_beta(2) # Returns c(-3, 3, 3)
+build_beta(4) # Returns c(-3, 1.5, 1.5, 1.5, 1.5)
 
 }

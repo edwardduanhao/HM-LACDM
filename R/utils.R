@@ -75,7 +75,7 @@ get_device <- function(device = "auto") {
 #' Converts an integer to its binary representation as a vector of 0s and 1s
 #' with a specified length.
 #'
-#' @param x An integer to convert (must be in range [0, 2^d - 1])
+#' @param x An integer to convert, must be in range (0, 2^d - 1)
 #' @param d The desired length of the binary vector
 #'
 #' @return A numeric vector of length d containing the binary representation
@@ -167,6 +167,7 @@ build_delta <- function(q, interact = FALSE) {
 #' Diagnosis Model based on the number of required attributes.
 #'
 #' @param k Number of attributes required by the item (at most 5)
+#' @param signal "strong", "moderate" or "weak". Character string indicating the signal strength
 #'
 #' @return A numeric vector of item parameters (beta values)
 #'

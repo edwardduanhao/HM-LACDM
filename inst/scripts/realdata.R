@@ -1,23 +1,17 @@
 library(ggplot2)
+library(hmcdm)
 
-# Load the Q-matrix
-q_mat <- as.matrix(read.table("inst/Q_Matrix/Q_3.txt"))
+# Load real data
 
-# Generate data
-data <- data_generate(
-  i = 500,
-  k = 3,
-  j = 21,
-  t = 2,
-  n_dataset = 1,
-  seed = 42,
-  q_mat = q_mat,
-  signal = "strong",
-  device = "cpu"
+data("Y_real_array", package = "hmcdm")
+data("Q_matrix", package = "hmcdm")
+
+
+data <- list(
+  "y" = aperm(Y_real_array, c(1, 3, 2)),
+  "k" = 4
 )
 
-# Mask some data as NA (randomly mask 10% of responses)
-# data$y[sample(length(data$y), size = floor(0.8 * length(data$y)))] <- NA
 
 # Run coordinate ascent variational inference for HMLCDM
 res <- hmlcdm_vb(
@@ -28,7 +22,7 @@ res <- hmlcdm_vb(
 )
 
 # Run post-hoc analysis
-res <- post_hoc(res, data, alpha_level = 0.05, q_mat_true = data$ground_truth$q_mat)
+res <- post_hoc(res, data, alpha_level = 0.05, q_mat_true = Q_matrix)
 
 cat("Q-matrix recovery accuracy: ", res$q_mat_acc, "\n")
 

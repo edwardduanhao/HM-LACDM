@@ -5,20 +5,14 @@
 \title{Q-Matrix Recovery via Statistical Testing}
 \usage{
 q_mat_recovery(
-  m_beta,
-  v_beta,
+  beta_hat,
+  beta_hat_sd,
   beta_hat_trace,
   alpha_level = 0.05,
   q_mat_true = NULL
 )
 }
 \arguments{
-\item{m_beta}{A list of length j containing posterior mean vectors for
-item-effect parameters (beta), where each element is a torch tensor}
-
-\item{v_beta}{A list of length j containing posterior covariance matrices
-for item-effect parameters (beta), where each element is a torch tensor}
-
 \item{beta_hat_trace}{A tensor of shape (max_iter, j, k+1) containing the
 trace of beta parameter estimates across iterations}
 
@@ -28,6 +22,12 @@ trace of beta parameter estimates across iterations}
 \item{q_mat_true}{Optional true Q-matrix of shape (j, k) for evaluating
 recovery accuracy. If provided, permutation search is performed to
 find the best attribute ordering (default: NULL)}
+
+\item{m_beta}{A list of length j containing posterior mean vectors for
+item-effect parameters (beta), where each element is a torch tensor}
+
+\item{v_beta}{A list of length j containing posterior covariance matrices
+for item-effect parameters (beta), where each element is a torch tensor}
 }
 \value{
 If q_mat_true is NULL, returns a binary matrix Q_hat of shape (j, k).

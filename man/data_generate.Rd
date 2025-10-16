@@ -12,6 +12,7 @@ data_generate(
   n_dataset = 1,
   seed = NULL,
   q_mat = NULL,
+  signal = "easy",
   device = "auto"
 )
 }
